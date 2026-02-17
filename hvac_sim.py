@@ -11,7 +11,7 @@ Objects:
   - AI:1 chiller_speed_percent       (read-only)
 
 To run:
-    python3 hvac_sim.py --ini ./BACpypes.ini --debug bacpypes.udp
+    python3 hvac_sim.py --ini ./config.ini
 
 Authors:
     Capstone Group:
@@ -35,14 +35,14 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Slider, Button
 
-from bacpypes.consolelogging import ConfigArgumentParser
-from bacpypes.core import run, stop
-from bacpypes.app import BIPSimpleApplication
-from bacpypes.object import (
-    DeviceObject,
-    AnalogInputObject,
-    AnalogOutputObject,
-    BinaryOutputObject,
+import argparse
+import configparser
+import asyncio
+import BAC0
+from BAC0.core.devices.local.factory import (
+    analog_output,
+    analog_input,
+    binary_output,
 )
 
 current_temp_c = 22.0
@@ -72,68 +72,108 @@ NOISE_TEMP = 0.05
 NOISE_CHILLER = 0.8
 
 
-class HVACApplication(BIPSimpleApplication):
-    pass
+ao_setpoint = None
+ao_intake = None
+ao_exhaust = None
+bo_e_stop = None
+ai_temp = None
+ai_chiller = None
+bacnet = None
 
 
-def build_objects(device_name: str, device_id: int):
-    device = DeviceObject(
-        objectIdentifier=("device", device_id),
-        objectName=device_name,
-        vendorIdentifier=15,
-    )
+async def _run_bacnet_and_hold(device_id: int, address: str, running_evt: threading.Event, debug: bool = False):
+    """Start BAC0, register objects, expose underlying BACnet objects,
+    and keep the asyncio loop alive while `running_evt` is set.
+    """
+    global ao_setpoint, ao_intake, ao_exhaust, bo_e_stop, ai_temp, ai_chiller, bacnet
 
-    ao_setpoint = AnalogOutputObject(
-        objectIdentifier=("analogOutput", 0),
-        objectName="temperature_setpoint_c",
-        presentValue=temperature_setpoint_c,
-        description="Desired room temperature (°C)",
-        relinquishDefault=23.0,
-    )
-    ao_intake = AnalogOutputObject(
-        objectIdentifier=("analogOutput", 1),
-        objectName="intake_fan_speed_percent",
-        presentValue=intake_fan_speed,
-        description="Intake fan speed (%)",
-        relinquishDefault=30.0,
-    )
-    ao_exhaust = AnalogOutputObject(
-        objectIdentifier=("analogOutput", 2),
-        objectName="exhaust_fan_speed_percent",
-        presentValue=exhaust_fan_speed,
-        description="Exhaust fan speed (%)",
-        relinquishDefault=30.0,
-    )
-    bo_e_stop = BinaryOutputObject(
-        objectIdentifier=("binaryOutput", 0),
-        objectName="emergency_stop",
-        presentValue=emergency_stop,
-        description="Emergency stop (True/False)",
-        relinquishDefault=False,
-    )
+    if not debug:
+        BAC0.log_level("silence")
 
-    ai_temp = AnalogInputObject(
-        objectIdentifier=("analogInput", 0),
-        objectName="current_temperature_c",
-        presentValue=current_temp_c,
-        description="Measured room temperature (°C)",
-    )
-    ai_chiller = AnalogInputObject(
-        objectIdentifier=("analogInput", 1),
-        objectName="chiller_speed_percent",
-        presentValue=chiller_speed_pct,
-        description="Chiller load (%)",
-    )
+    try:
+        bacnet = BAC0.start(ip=address, deviceId=device_id)
 
-    return device, [
-        device,
-        ao_setpoint,
-        ao_intake,
-        ao_exhaust,
-        bo_e_stop,
-        ai_temp,
-        ai_chiller,
-    ]
+        bacnet.this_application.objectName = "HVACSim"
+        bacnet.this_application.vendorName = "HVACSim"
+        bacnet.this_application.modelName = "HVAC-Sim"
+        bacnet.this_application.firmwareRevision = "1.0"
+        bacnet.this_application.description = "HVAC Simulation Device"
+
+        ao_setpoint_f = analog_output(
+            name="temperature_setpoint_c",
+            instance=0,
+            description="Desired room temperature (°C)",
+            presentValue=temperature_setpoint_c,
+        )
+        ao_intake_f = analog_output(
+            name="intake_fan_speed_percent",
+            instance=1,
+            description="Intake fan speed (%)",
+            presentValue=intake_fan_speed,
+        )
+        ao_exhaust_f = analog_output(
+            name="exhaust_fan_speed_percent",
+            instance=2,
+            description="Exhaust fan speed (%)",
+            presentValue=exhaust_fan_speed,
+        )
+
+        bo_e_stop_f = binary_output(
+            name="emergency_stop",
+            instance=0,
+            description="Emergency stop (True/False)",
+            presentValue=emergency_stop,
+        )
+
+        ai_temp_f = analog_input(
+            name="current_temperature_c",
+            instance=0,
+            description="Measured room temperature (°C)",
+            presentValue=current_temp_c,
+        )
+        ai_chiller_f = analog_input(
+            name="chiller_speed_percent",
+            instance=1,
+            description="Chiller load (%)",
+            presentValue=chiller_speed_pct,
+        )
+
+        ao_setpoint_f.add_objects_to_application(bacnet)
+        ao_intake_f.add_objects_to_application(bacnet)
+        ao_exhaust_f.add_objects_to_application(bacnet)
+        bo_e_stop_f.add_objects_to_application(bacnet)
+        ai_temp_f.add_objects_to_application(bacnet)
+        ai_chiller_f.add_objects_to_application(bacnet)
+
+        try:
+            ao_intake = ao_intake_f.objects["intake_fan_speed_percent"]
+            ao_exhaust = ao_exhaust_f.objects["exhaust_fan_speed_percent"]
+            bo_e_stop = bo_e_stop_f.objects["emergency_stop"]
+            ai_temp = ai_temp_f.objects["current_temperature_c"]
+            ai_chiller = ai_chiller_f.objects["chiller_speed_percent"]
+            ao_setpoint = ao_setpoint_f.objects["temperature_setpoint_c"]
+        except KeyError as err:
+            missing_key = err.args[0] if err.args else "<unknown>"
+            raise RuntimeError(
+                f"[HVACSim] Failed to create BACnet object '{missing_key}'. "
+                "Check BAC0 configuration and object factory definitions."
+            ) from err
+
+        print(f"[HVACSim] BACnet device ready on {address} (ID {device_id})")
+
+        while running_evt.is_set():
+            await asyncio.sleep(1.0)
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"[HVACSim] Failed to initialize or run BACnet device: {e}")
+    finally:
+        try:
+            if bacnet:
+                bacnet.disconnect()
+        except Exception as e:
+            print(f"[HVACSim] Warning: Error during BACnet disconnect: {e}")
 
 
 def hvac_loop(
@@ -428,67 +468,76 @@ def start_plot(
 
     def _on_close(_evt):
         running_evt.clear()
-        try:
-            stop()
-        except Exception:
-            pass
 
     fig.canvas.mpl_connect("close_event", _on_close)
 
     plt.show()
 
-    running_evt.clear()
-    try:
-        stop()
-    except Exception:
-        pass
-
 
 def main():
-    parser = ConfigArgumentParser(description="BACnet HVAC Simulation Device")
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="BACnet HVAC Simulation Device")
+    parser.add_argument("--ini", default="./config.ini", help="Path to INI file")
+    parser.add_argument("--debug", action="store_true", help="Enable verbose BACnet logging")
+    _ns = parser.parse_args()
 
-    device_name = args.ini.objectname or "HVACSim"
-    device_id = int(args.ini.objectidentifier)
-    device, objects = build_objects(device_name, device_id)
+    cfg = configparser.ConfigParser()
+    files_read = cfg.read(_ns.ini)
+    if not files_read:
+        print(f"[HVACSim] Warning: Configuration file '{_ns.ini}' not found or could not be read; using default settings.")
+        sec = {}
+    elif "HVACSim" not in cfg:
+        print(f"[HVACSim] Warning: INI file '{_ns.ini}' is missing [HVACSim] section; using default settings.")
+        sec = {}
+    else:
+        sec = cfg["HVACSim"]
 
-    app = HVACApplication(device, args.ini.address)
+    device_id = int(sec.get("objectIdentifier", "101"))
+    address = sec.get("address", "127.0.0.1")
 
-    device.maxApduLengthAccepted = int(args.ini.maxapdulengthaccepted)
-    device.segmentationSupported = args.ini.segmentationsupported
-    device.vendorIdentifier = int(args.ini.vendoridentifier)
-    device.protocolServicesSupported = app.get_services_supported().value
+    if '/' not in address:
+        address = f"{address}/24"
 
-    for obj in objects[1:]:
-        app.add_object(obj)
-
-    print(
-        f"[HVACSim] Device '{device_name}' ready on {args.ini.address} (ID {device_id})"
-    )
-
-    data_buf = {
-        k: deque(maxlen=600)
-        for k in ["time", "temp", "setp", "chill", "intake", "exhaust"]
-    }
+    data_buf = {k: deque(maxlen=600) for k in ["time", "temp", "setp", "chill", "intake", "exhaust"]}
 
     running_evt = threading.Event()
     running_evt.set()
 
-    core_thread = threading.Thread(target=run, name="bacpypes-core", daemon=True)
+    bacnet_ready_evt = threading.Event()
+
+    async def _bacnet_main():
+        core_task = asyncio.create_task(_run_bacnet_and_hold(device_id, address, running_evt, _ns.debug))
+
+        try:
+            global ao_setpoint
+            while ao_setpoint is None and running_evt.is_set():
+                if core_task.done():
+                    await core_task
+                    break
+                await asyncio.sleep(0.05)
+        finally:
+            bacnet_ready_evt.set()
+
+        await core_task
+
+    def _bacnet_thread():
+        asyncio.run(_bacnet_main())
+
+    core_thread = threading.Thread(target=_bacnet_thread, name="bac0-core", daemon=True)
     core_thread.start()
 
+    if not bacnet_ready_evt.wait(timeout=30.0):
+        print("[HVACSim] Error: BACnet objects failed to initialize within 30 seconds; shutting down.")
+        running_evt.clear()
+        core_thread.join(timeout=5.0)
+        return
+    if ao_setpoint is None or ao_intake is None or ao_exhaust is None or bo_e_stop is None or ai_temp is None or ai_chiller is None:
+        print("[HVACSim] Error: BACnet initialization failed; shutting down.")
+        running_evt.clear()
+        core_thread.join(timeout=5.0)
+        return
     ctl_thread = threading.Thread(
         target=hvac_loop,
-        args=(
-            objects[1],
-            objects[2],
-            objects[3],
-            objects[4],
-            objects[5],
-            objects[6],
-            data_buf,
-            running_evt,
-        ),
+        args=(ao_setpoint, ao_intake, ao_exhaust, bo_e_stop, ai_temp, ai_chiller, data_buf, running_evt),
         name="hvac-loop",
         daemon=True,
     )
@@ -496,30 +545,19 @@ def main():
 
     def _sigint(_sig, _frm):
         running_evt.clear()
-        try:
-            stop()
-        except Exception:
-            pass
         plt.close("all")
 
     signal.signal(signal.SIGINT, _sigint)
 
-    start_plot(
-        data_buf,
-        running_evt,
-        objects[1],
-        objects[2],
-        objects[3],
-        objects[4],
-    )
+    start_plot(data_buf, running_evt, ao_setpoint, ao_intake, ao_exhaust, bo_e_stop)
 
-    ctl_thread.join(timeout=1.0)
-    core_thread.join(timeout=1.0)
+    ctl_thread.join(timeout=5.0)
+    core_thread.join(timeout=5.0)
     print("[HVACSim] Shut down.")
 
 
 if __name__ == "__main__":
     import warnings
-    warnings.filterwarnings("ignore", message="no signal handlers for child threads") # Harmless; related to vis.
+    warnings.filterwarnings("ignore", message="no signal handlers for child threads")
 
     main()

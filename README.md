@@ -28,7 +28,7 @@ This allows cybersecurity practitioners to emulate attacks against building HVAC
 
 * Python 3.10+
 * `matplotlib` (for the HMI)
-* `bacpypes` (BACnet/IP stack)
+* `bac0` (BACnet helper library; provides BACnet/IP via BACpypes3)
 * Should run on Linux, macOS, or Windows
 * **Caldera** with its BACnet plugin
 
@@ -58,18 +58,12 @@ git clone https://github.com/mitre/hvac-sim.git
 pip install -r requirements.txt
 ```
 
-3. You can have a variety of different INI files specifying different port numbers or other BACnet communications parameters. Visit the [BACpypes documentation](https://bacpypes.readthedocs.io/en/stable/samples/sample001.html) to learn more about this INI file.
-
-Example provided in repo root (`BACpypes.ini`):
+3. You can provide an INI-style config file to set the device instance and network address. Example provided in repo root (`config.ini`):
 
 ```
-[BACpypes]
-objectName: HVACSim
-objectIdentifier: 101
-maxApduLengthAccepted: 1024
-segmentationSupported: segmentedBoth
-vendorIdentifier: 15
-address: 127.0.0.1
+[HVACSim]
+objectIdentifier = 101
+address = 127.0.0.1/24
 ```
 
 ## BACnet Object Map
@@ -90,7 +84,7 @@ The simulator exposes the following BACnet objects:
 ### Step 1: Start the Simulator
 
 ```bash
-python3 hvac_sim.py --ini ./BACpypes.ini
+python3 hvac_sim.py --ini ./config.ini
 ```
 
 Launching the script does three things:
@@ -274,7 +268,7 @@ This allows for simulation of:
 
    * No firewall blocks UDP/47808
    * Correct network interface is used
-3. Use `--debug bacpypes.udp` for verbose network logs
+3. Run with `python3 hvac_sim.py --debug` for verbose BACnet logs
 
 ## License
 
@@ -285,6 +279,6 @@ See the LICENSE file for details.
 
 * [MITRE Caldera](https://github.com/mitre/caldera)
 * [Caldera for OT](https://github.com/mitre/caldera-ot)
-* [BACpypes](https://github.com/JoelBender/bacpypes)
+* [BAC0](https://pypi.org/project/bac0/)
 
 © 2026 THE MITRE CORPORATION. ALL RIGHTS RESERVED. APPROVED FOR PUBLIC RELEASE. DISTRIBUTION UNLIMITED PR_26-0182
