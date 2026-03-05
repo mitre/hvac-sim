@@ -33,7 +33,7 @@ from collections import deque
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib.widgets import Slider, Button
+from matplotlib.widgets import Slider, Button, TextBox
 
 import argparse
 import configparser
@@ -349,14 +349,21 @@ def start_plot(
     )
 
     ax_s_setp = fig.add_axes(
-        [left + 0.02 * width, bottom + 4 * slider_h, width * 0.7, slider_h * 0.6]
+        [left + 0.02 * width, bottom + 4 * slider_h, width * 0.57, slider_h * 0.6]
     )
     ax_s_intake = fig.add_axes(
-        [left + 0.02 * width, bottom + 3 * slider_h, width * 0.7, slider_h * 0.6]
+        [left + 0.02 * width, bottom + 3 * slider_h, width * 0.57, slider_h * 0.6]
     )
     ax_s_exhaust = fig.add_axes(
-        [left + 0.02 * width, bottom + 2 * slider_h, width * 0.7, slider_h * 0.6]
+        [left + 0.02 * width, bottom + 2 * slider_h, width * 0.57, slider_h * 0.6]
     )
+
+    tb_x = left + 0.02 * width + width * 0.59
+    tb_w = width * 0.10
+    tb_h = slider_h * 0.6
+    ax_tb_setp   = fig.add_axes([tb_x, bottom + 4 * slider_h, tb_w, tb_h])
+    ax_tb_intake  = fig.add_axes([tb_x, bottom + 3 * slider_h, tb_w, tb_h])
+    ax_tb_exhaust = fig.add_axes([tb_x, bottom + 2 * slider_h, tb_w, tb_h])
 
     btn_width = width * 0.2
     btn_height = slider_h * 2.1
@@ -393,23 +400,58 @@ def start_plot(
 
     for s in (s_setp, s_intake, s_exhaust):
         if s.valtext is not None:
-            s.valtext.set_fontweight("bold")
+            s.valtext.set_visible(False)
+
+    tb_setp    = TextBox(ax_tb_setp,   "", initial=f"{initial_setp_f:.1f}")
+    tb_intake  = TextBox(ax_tb_intake,  "", initial=f"{float(ao_intake.presentValue):.0f}")
+    tb_exhaust = TextBox(ax_tb_exhaust, "", initial=f"{float(ao_exhaust.presentValue):.0f}")
 
     btn_estop = Button(ax_btn_estop, "E-STOP: OFF")
     btn_estop.label.set_fontweight("bold")
 
     def on_setp_change(val_f):
         ao_setpoint.presentValue = (val_f - 32.0) * 5.0 / 9.0
+        tb_setp.set_val(f"{val_f:.1f}")
 
     def on_intake_change(val_pct):
         ao_intake.presentValue = float(val_pct)
+        tb_intake.set_val(f"{val_pct:.0f}")
 
     def on_exhaust_change(val_pct):
         ao_exhaust.presentValue = float(val_pct)
+        tb_exhaust.set_val(f"{val_pct:.0f}")
+
+    def on_setp_submit(text):
+        try:
+            val = float(text)
+            val = max(60.0, min(85.0, val))
+            s_setp.set_val(val)
+        except ValueError:
+            pass
+
+    def on_intake_submit(text):
+        try:
+            val = float(text)
+            val = max(0.0, min(100.0, val))
+            s_intake.set_val(val)
+        except ValueError:
+            pass
+
+    def on_exhaust_submit(text):
+        try:
+            val = float(text)
+            val = max(0.0, min(100.0, val))
+            s_exhaust.set_val(val)
+        except ValueError:
+            pass
 
     s_setp.on_changed(on_setp_change)
     s_intake.on_changed(on_intake_change)
     s_exhaust.on_changed(on_exhaust_change)
+
+    tb_setp.on_submit(on_setp_submit)
+    tb_intake.on_submit(on_intake_submit)
+    tb_exhaust.on_submit(on_exhaust_submit)
 
     def update_estop_button():
         if bool(bo_e_stop.presentValue):
