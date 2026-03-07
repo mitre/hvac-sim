@@ -252,8 +252,6 @@ def hvac_loop(
             time.sleep(2.0)
 
 
-def c_to_f(value_c: float) -> float:
-    return value_c * 9.0 / 5.0 + 32.0
 
 
 def start_plot(
@@ -263,7 +261,18 @@ def start_plot(
     ao_intake,
     ao_exhaust,
     bo_e_stop,
+    use_fahrenheit=False,
 ):
+    unit = "\u00b0F" if use_fahrenheit else "\u00b0C"
+    setp_min = 60.0 if use_fahrenheit else 15.0
+    setp_max = 95.0 if use_fahrenheit else 35.0
+    temp_pad = 4.0 if use_fahrenheit else 2.0
+
+    def to_display(c):
+        return c * 9.0 / 5.0 + 32.0 if use_fahrenheit else c
+
+    def from_display(d):
+        return (d - 32.0) * 5.0 / 9.0 if use_fahrenheit else d
     TEMP_COLOR = "#007ACC"
     SETPOINT_COLOR = "#FF8C00"
     CHILLER_COLOR = "#004B6B"
@@ -303,15 +312,15 @@ def start_plot(
     ax_controls.axis("off")
 
     (line_temp,) = ax_temp.plot(
-        [], [], lw=2, label="Current Temp (°F)", color=TEMP_COLOR
+        [], [], lw=2, label=f"Current Temp ({unit})", color=TEMP_COLOR
     )
     (line_setp,) = ax_temp.plot(
-        [], [], lw=2, linestyle="--", label="Setpoint (°F)", color=SETPOINT_COLOR
+        [], [], lw=2, linestyle="--", label=f"Setpoint ({unit})", color=SETPOINT_COLOR
     )
 
     ax_temp.set_title("Server Room Temperature")
     ax_temp.set_xlabel("Time (s)")
-    ax_temp.set_ylabel("Temperature (°F)")
+    ax_temp.set_ylabel(f"Temperature ({unit})")
     ax_temp.legend(loc="upper right", frameon=True)
 
     for ax in (ax_temp, ax_chill, ax_intake, ax_exhaust):
@@ -371,14 +380,14 @@ def start_plot(
     btn_bottom = bottom + 2.3 * slider_h
     ax_btn_estop = fig.add_axes([btn_left, btn_bottom, btn_width, btn_height])
 
-    initial_setp_f = c_to_f(float(ao_setpoint.presentValue))
+    initial_setp_disp = to_display(float(ao_setpoint.presentValue))
 
     s_setp = Slider(
         ax=ax_s_setp,
-        label="Setpoint (°F)",
-        valmin=60.0,
-        valmax=85.0,
-        valinit=initial_setp_f,
+        label=f"Setpoint ({unit})",
+        valmin=setp_min,
+        valmax=setp_max,
+        valinit=initial_setp_disp,
         facecolor=TEMP_COLOR,
     )
     s_intake = Slider(
@@ -402,16 +411,16 @@ def start_plot(
         if s.valtext is not None:
             s.valtext.set_visible(False)
 
-    tb_setp    = TextBox(ax_tb_setp,   "", initial=f"{initial_setp_f:.1f}")
+    tb_setp    = TextBox(ax_tb_setp,   "", initial=f"{initial_setp_disp:.1f}")
     tb_intake  = TextBox(ax_tb_intake,  "", initial=f"{float(ao_intake.presentValue):.0f}")
     tb_exhaust = TextBox(ax_tb_exhaust, "", initial=f"{float(ao_exhaust.presentValue):.0f}")
 
     btn_estop = Button(ax_btn_estop, "E-STOP: OFF")
     btn_estop.label.set_fontweight("bold")
 
-    def on_setp_change(val_f):
-        ao_setpoint.presentValue = (val_f - 32.0) * 5.0 / 9.0
-        tb_setp.set_val(f"{val_f:.1f}")
+    def on_setp_change(val):
+        ao_setpoint.presentValue = from_display(val)
+        tb_setp.set_val(f"{val:.1f}")
 
     def on_intake_change(val_pct):
         ao_intake.presentValue = float(val_pct)
@@ -424,7 +433,7 @@ def start_plot(
     def on_setp_submit(text):
         try:
             val = float(text)
-            val = max(60.0, min(85.0, val))
+            val = max(setp_min, min(setp_max, val))
             s_setp.set_val(val)
         except ValueError:
             pass
@@ -484,11 +493,11 @@ def start_plot(
         t0 = data_buf["time"][0]
         x = [t - t0 for t in data_buf["time"]]
 
-        temp_f = [c_to_f(c) for c in data_buf["temp"]]
-        setp_f = [c_to_f(c) for c in data_buf["setp"]]
+        temp_vals = [to_display(c) for c in data_buf["temp"]]
+        setp_vals = [to_display(c) for c in data_buf["setp"]]
 
-        line_temp.set_data(x, temp_f)
-        line_setp.set_data(x, setp_f)
+        line_temp.set_data(x, temp_vals)
+        line_setp.set_data(x, setp_vals)
         line_chill.set_data(x, data_buf["chill"])
         line_intake.set_data(x, data_buf["intake"])
         line_exhaust.set_data(x, data_buf["exhaust"])
@@ -498,10 +507,9 @@ def start_plot(
         for ax in (ax_temp, ax_chill, ax_intake, ax_exhaust):
             ax.set_xlim(xmin, xmax + 1.0)
 
-        tmin = min(temp_f)
-        tmax = max(temp_f)
-        pad = 2.0
-        ax_temp.set_ylim(tmin - pad, tmax + pad)
+        tmin = min(temp_vals)
+        tmax = max(temp_vals)
+        ax_temp.set_ylim(tmin - temp_pad, tmax + temp_pad)
 
         return line_temp, line_setp, line_chill, line_intake, line_exhaust
 
@@ -535,6 +543,8 @@ def main():
 
     device_id = int(sec.get("objectIdentifier", "101"))
     address = sec.get("address", "127.0.0.1")
+    unit_str = sec.get("temperature_unit", "celsius").strip().lower()
+    use_fahrenheit = unit_str in ("f", "fahrenheit", "imperial")
 
     if '/' not in address:
         address = f"{address}/24"
@@ -591,7 +601,8 @@ def main():
 
     signal.signal(signal.SIGINT, _sigint)
 
-    start_plot(data_buf, running_evt, ao_setpoint, ao_intake, ao_exhaust, bo_e_stop)
+    start_plot(data_buf, running_evt, ao_setpoint, ao_intake, ao_exhaust, bo_e_stop,
+               use_fahrenheit=use_fahrenheit)
 
     ctl_thread.join(timeout=5.0)
     core_thread.join(timeout=5.0)

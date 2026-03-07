@@ -64,7 +64,10 @@ pip install -r requirements.txt
 [HVACSim]
 objectIdentifier = 101
 address = 127.0.0.1/24
+temperature_unit = celsius
 ```
+
+> **Temperature units:** Set `temperature_unit` to `celsius` or `fahrenheit` to choose the display unit used in the HMI visualization. The BACnet objects always use °C internally; this setting only affects what is shown on screen.
 
 ## BACnet Object Map
 
@@ -216,7 +219,7 @@ When launched, HVACSim displays an HMI containing:
 
 **Main Temperature Graph**
 
-* Real-time plot of current temperature (°F)
+* Real-time plot of current temperature (unit set by `temperature_unit` in config)
 * Setpoint shown as a dashed line
 
 **Mini Trend Charts**
@@ -227,7 +230,7 @@ When launched, HVACSim displays an HMI containing:
 
 **Interactive Controls**
 
-* Setpoint slider (°F)
+* Setpoint slider (unit set by `temperature_unit` in config)
 * Intake fan slider (%)
 * Exhaust fan slider (%)
 * Emergency-stop toggle button
