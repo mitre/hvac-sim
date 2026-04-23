@@ -23,6 +23,7 @@ In collaboration with MITRE Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre
 This allows cybersecurity practitioners to emulate attacks against building HVAC systems without requiring physical industrial hardware. When paired with the [Caldera BACnet plugin](https://github.com/mitre/bacnet), HVACSim becomes an OT testbed for reconnaissance, manipulation, and response.
 
 ## Getting Started
+For a detailed walkthrough, please read our medium article on HVACSim! https://medium.com/@mitrecaldera/caldera-for-ot-hvacsim-expanding-access-to-ot-security-education-c4fcc47396ab
 
 ### Dependencies
 
