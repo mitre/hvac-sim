@@ -1,13 +1,13 @@
 # HVACSim: BACnet Server Room HVAC Simulator
 
-A simulated HVAC control system using BACnet/IP, designed as a companion to **MITRE Caldera for OT** for red/blue-team exercises involving cyber–physical systems.
+A simulated HVAC control system using BACnet/IP, designed as a companion to **Caldera for OT** for red/blue-team exercises involving cyber–physical systems.
 
 ## Authors
 
 Created by University of Hawaii at Manoa Students for Capstone Project:
 Elijah Saloma and Jake Dickinson
 
-In collaboration with MITRE Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
+In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
 
 ![HMI](./Assets/Demo.gif)
 
@@ -33,7 +33,7 @@ For a detailed walkthrough, please read our medium article on HVACSim! https://m
 * Should run on Linux, macOS, or Windows
 * **Caldera** with its BACnet plugin
 
-  * [Caldera installation instructions](https://github.com/mitre/caldera?tab=readme-ov-file#requirements)
+  * [Caldera installation instructions](https://github.com/apache/caldera?tab=readme-ov-file#requirements)
 
 **Linux users:** Install system packages for matplotlib GUI support:
 
@@ -284,7 +284,7 @@ See the LICENSE file for details.
 
 ## Acknowledgments
 
-* [MITRE Caldera](https://github.com/mitre/caldera)
+* [Caldera](https://github.com/apache/caldera)
 * [Caldera for OT](https://github.com/mitre/caldera-ot)
 * [BACpypes](https://github.com/JoelBender/bacpypes)
 
