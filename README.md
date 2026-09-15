@@ -9,7 +9,7 @@ Elijah Saloma and Jake Dickinson
 
 In collaboration with MITRE Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
 
-![HMI](./Assets/Demo.gif)
+![HMI](./docs/images/Demo.gif)
 
 ## Description
 
@@ -73,14 +73,18 @@ temperature_unit = celsius
 
 The simulator exposes the following BACnet objects:
 
-| Type    | Object Name                 | Description                               |
-| ------- | --------------------------- | ----------------------------------------- |
-| **AO0** | `temperature_setpoint_c`    | Desired room temperature in °C (writable) |
-| **AO1** | `intake_fan_speed_percent`  | Intake fan command (0–100%)               |
-| **AO2** | `exhaust_fan_speed_percent` | Exhaust fan command (0–100%)              |
-| **BO0** | `emergency_stop`            | Safety kill switch for chiller/fans       |
-| **AI0** | `current_temperature_c`     | Measured room temperature (°C)            |
-| **AI1** | `chiller_speed_percent`     | PI-controlled chiller load (%)            |
+Object types follow standard BACnet/HVAC practice: sensors are Analog Inputs,
+fan actuator commands are Analog Outputs, the setpoint is an Analog Value, and
+the emergency stop is a Binary Value. Instances are numbered per type from 1.
+
+| Type    | Object Name                 | Access      | Description                          |
+| ------- | --------------------------- | ----------- | ------------------------------------ |
+| **AV:1** | `temperature_setpoint_c`   | commandable | Desired room temperature (°C)        |
+| **AO:1** | `intake_fan_speed_percent` | commandable | Intake fan command (0–100%)          |
+| **AO:2** | `exhaust_fan_speed_percent`| commandable | Exhaust fan command (0–100%)         |
+| **BV:1** | `emergency_stop`           | commandable | Safety kill switch for chiller/fans  |
+| **AI:1** | `current_temperature_c`    | read-only   | Measured room temperature (°C)       |
+| **AI:2** | `chiller_speed_percent`    | read-only   | PI-controlled chiller load (%)       |
 
 ## Usage
 
@@ -112,10 +116,10 @@ The ReadProperty service is used by a BACnet client to request the value of one 
 ./bacrp <device-instance> <object-type> <object-instance> <property> <index>
 ```
 
-##### Example: Read current temperature from AI:0
+##### Example: Read current temperature from AI:1
 
 ```
-./bacrp 101 analog-input 0 presentValue -1
+./bacrp 101 analog-input 1 presentValue -1
 ```
 
 #### WriteProperty (bacwp)
@@ -128,10 +132,10 @@ The WriteProperty service is used by a BACnet client to write a value to a speci
 ./bacwp <device-instance> <object-type> <object-instance> <property> <priority> <index> <tag> <value>
 ```
 
-##### Example 1: Set temperature setpoint on AO:0 to 18°C
+##### Example 1: Set temperature setpoint on AV:1 to 18°C
 
 ```
-./bacwp 101 analog-output 0 presentValue 8 -1 real 18.0
+./bacwp 101 analog-value 1 presentValue 8 -1 real 18.0
 ```
 
 ##### Example 2: Override/increase intake fan speed to 75%
@@ -143,7 +147,7 @@ The WriteProperty service is used by a BACnet client to write a value to a speci
 ##### Example 3: Trigger Emergency Stop 🛑
 
 ```
-./bacwp 101 binary-output 0 presentValue 8 -1 boolean true
+./bacwp 101 binary-value 1 presentValue 8 -1 boolean true
 ```
 
 ## Understanding the Process Simulation
@@ -263,6 +267,19 @@ This allows for simulation of:
 * Setpoint manipulation attacks
 * Disruptive fan/chiller control
 * Reconnaissance of BACnet points
+
+### Fact Source, Adversary Profiles, and Scenarios
+
+This repo ships Caldera templates under `docs/`:
+
+* [`docs/sources/hvac-simulator-facts.yml`](docs/sources/hvac-simulator-facts.yml) - a fact source with the HVACSim device, read, and write facts. Copy it into `plugins/bacnet/data/sources/`.
+* [`docs/adversaries/`](docs/adversaries/) - three BACnet adversary profiles. Copy them into `plugins/bacnet/data/adversaries/`.
+* [`docs/scenarios/`](docs/scenarios/) - walkthroughs mapping each profile to ATT&CK for ICS techniques and the Caldera abilities it runs:
+  * [Scenario 1: Reconnaissance](docs/scenarios/scenario_1_reconnaissance.md)
+  * [Scenario 2: Thermal Runaway](docs/scenarios/scenario_2_thermal_runaway.md)
+  * [Scenario 3: Emergency Stop](docs/scenarios/scenario_3_emergency_stop.md)
+
+The ability UUIDs in the adversary profiles come from the [Caldera BACnet plugin](https://github.com/mitre/bacnet); the profiles reference them, they are not defined here.
 
 ## Help and Troubleshooting
 
