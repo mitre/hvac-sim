@@ -1,13 +1,13 @@
 # HVACSim: BACnet Server Room HVAC Simulator
 
-A simulated HVAC control system using BACnet/IP, designed as a companion to **MITRE Caldera for OT** for red/blue-team exercises involving cyber–physical systems.
+A simulated HVAC control system using BACnet/IP, designed as a companion to **Caldera for OT** for red/blue-team exercises involving cyber–physical systems.
 
 ## Authors
 
 Created by University of Hawaii at Manoa Students for Capstone Project:
 Elijah Saloma and Jake Dickinson
 
-In collaboration with MITRE Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
+In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
 
 ![HMI](./docs/images/Demo.gif)
 
@@ -23,6 +23,7 @@ In collaboration with MITRE Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre
 This allows cybersecurity practitioners to emulate attacks against building HVAC systems without requiring physical industrial hardware. When paired with the [Caldera BACnet plugin](https://github.com/mitre/bacnet), HVACSim becomes an OT testbed for reconnaissance, manipulation, and response.
 
 ## Getting Started
+For a detailed walkthrough, please read our medium article on HVACSim! https://medium.com/@mitrecaldera/caldera-for-ot-hvacsim-expanding-access-to-ot-security-education-c4fcc47396ab
 
 ### Dependencies
 
@@ -32,7 +33,7 @@ This allows cybersecurity practitioners to emulate attacks against building HVAC
 * Should run on Linux, macOS, or Windows
 * **Caldera** with its BACnet plugin
 
-  * [Caldera installation instructions](https://github.com/mitre/caldera?tab=readme-ov-file#requirements)
+  * [Caldera installation instructions](https://github.com/apache/caldera?tab=readme-ov-file#requirements)
 
 **Linux users:** Install system packages for matplotlib GUI support:
 
@@ -297,7 +298,7 @@ See the LICENSE file for details.
 
 ## Acknowledgments
 
-* [MITRE Caldera](https://github.com/mitre/caldera)
+* [Caldera](https://github.com/apache/caldera)
 * [Caldera for OT](https://github.com/mitre/caldera-ot)
 * [BAC0](https://pypi.org/project/bac0/)
 
