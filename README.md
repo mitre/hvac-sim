@@ -9,6 +9,8 @@ Elijah Saloma and Jake Dickinson
 
 In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
 
+The students' original BACpypes version is preserved on the `bacpypes` branch. This version moves to the bac0 library, uses standard BACnet object types, and adds Caldera scenarios and a docker lab.
+
 ![HMI](./docs/images/Demo.gif)
 
 ## Description
