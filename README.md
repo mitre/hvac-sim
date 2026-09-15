@@ -9,7 +9,7 @@ Elijah Saloma and Jake Dickinson
 
 In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
 
-![HMI](./Assets/Demo.gif)
+![HMI](./docs/images/Demo.gif)
 
 ## Description
 
@@ -29,7 +29,7 @@ For a detailed walkthrough, please read our medium article on HVACSim! https://m
 
 * Python 3.10+
 * `matplotlib` (for the HMI)
-* `bacpypes` (BACnet/IP stack)
+* `bac0` (BACnet helper library; provides BACnet/IP via BACpypes3)
 * Should run on Linux, macOS, or Windows
 * **Caldera** with its BACnet plugin
 
@@ -59,39 +59,40 @@ git clone https://github.com/mitre/hvac-sim.git
 pip install -r requirements.txt
 ```
 
-3. You can have a variety of different INI files specifying different port numbers or other BACnet communications parameters. Visit the [BACpypes documentation](https://bacpypes.readthedocs.io/en/stable/samples/sample001.html) to learn more about this INI file.
-
-Example provided in repo root (`BACpypes.ini`):
+3. You can provide an INI-style config file to set the device instance and network address. Example provided in repo root (`config.ini`):
 
 ```
-[BACpypes]
-objectName: HVACSim
-objectIdentifier: 101
-maxApduLengthAccepted: 1024
-segmentationSupported: segmentedBoth
-vendorIdentifier: 15
-address: 127.0.0.1
+[HVACSim]
+objectIdentifier = 101
+address = 127.0.0.1/24
+temperature_unit = celsius
 ```
+
+> **Temperature units:** Set `temperature_unit` to `celsius` or `fahrenheit` to choose the display unit used in the HMI visualization. The BACnet objects always use °C internally; this setting only affects what is shown on screen.
 
 ## BACnet Object Map
 
 The simulator exposes the following BACnet objects:
 
-| Type    | Object Name                 | Description                               |
-| ------- | --------------------------- | ----------------------------------------- |
-| **AO0** | `temperature_setpoint_c`    | Desired room temperature in °C (writable) |
-| **AO1** | `intake_fan_speed_percent`  | Intake fan command (0–100%)               |
-| **AO2** | `exhaust_fan_speed_percent` | Exhaust fan command (0–100%)              |
-| **BO0** | `emergency_stop`            | Safety kill switch for chiller/fans       |
-| **AI0** | `current_temperature_c`     | Measured room temperature (°C)            |
-| **AI1** | `chiller_speed_percent`     | PI-controlled chiller load (%)            |
+Object types follow standard BACnet/HVAC practice: sensors are Analog Inputs,
+fan actuator commands are Analog Outputs, the setpoint is an Analog Value, and
+the emergency stop is a Binary Value. Instances are numbered per type from 1.
+
+| Type    | Object Name                 | Access      | Description                          |
+| ------- | --------------------------- | ----------- | ------------------------------------ |
+| **AV:1** | `temperature_setpoint_c`   | commandable | Desired room temperature (°C)        |
+| **AO:1** | `intake_fan_speed_percent` | commandable | Intake fan command (0–100%)          |
+| **AO:2** | `exhaust_fan_speed_percent`| commandable | Exhaust fan command (0–100%)         |
+| **BV:1** | `emergency_stop`           | commandable | Safety kill switch for chiller/fans  |
+| **AI:1** | `current_temperature_c`    | read-only   | Measured room temperature (°C)       |
+| **AI:2** | `chiller_speed_percent`    | read-only   | PI-controlled chiller load (%)       |
 
 ## Usage
 
 ### Step 1: Start the Simulator
 
 ```bash
-python3 hvac_sim.py --ini ./BACpypes.ini
+python3 hvac_sim.py --ini ./config.ini
 ```
 
 Launching the script does three things:
@@ -116,10 +117,10 @@ The ReadProperty service is used by a BACnet client to request the value of one 
 ./bacrp <device-instance> <object-type> <object-instance> <property> <index>
 ```
 
-##### Example: Read current temperature from AI:0
+##### Example: Read current temperature from AI:1
 
 ```
-./bacrp 101 analog-input 0 presentValue -1
+./bacrp 101 analog-input 1 presentValue -1
 ```
 
 #### WriteProperty (bacwp)
@@ -132,10 +133,10 @@ The WriteProperty service is used by a BACnet client to write a value to a speci
 ./bacwp <device-instance> <object-type> <object-instance> <property> <priority> <index> <tag> <value>
 ```
 
-##### Example 1: Set temperature setpoint on AO:0 to 18°C
+##### Example 1: Set temperature setpoint on AV:1 to 18°C
 
 ```
-./bacwp 101 analog-output 0 presentValue 8 -1 real 18.0
+./bacwp 101 analog-value 1 presentValue 8 -1 real 18.0
 ```
 
 ##### Example 2: Override/increase intake fan speed to 75%
@@ -147,7 +148,7 @@ The WriteProperty service is used by a BACnet client to write a value to a speci
 ##### Example 3: Trigger Emergency Stop 🛑
 
 ```
-./bacwp 101 binary-output 0 presentValue 8 -1 boolean true
+./bacwp 101 binary-value 1 presentValue 8 -1 boolean true
 ```
 
 ## Understanding the Process Simulation
@@ -223,7 +224,7 @@ When launched, HVACSim displays an HMI containing:
 
 **Main Temperature Graph**
 
-* Real-time plot of current temperature (°F)
+* Real-time plot of current temperature (unit set by `temperature_unit` in config)
 * Setpoint shown as a dashed line
 
 **Mini Trend Charts**
@@ -234,7 +235,7 @@ When launched, HVACSim displays an HMI containing:
 
 **Interactive Controls**
 
-* Setpoint slider (°F)
+* Setpoint slider (unit set by `temperature_unit` in config)
 * Intake fan slider (%)
 * Exhaust fan slider (%)
 * Emergency-stop toggle button
@@ -268,6 +269,19 @@ This allows for simulation of:
 * Disruptive fan/chiller control
 * Reconnaissance of BACnet points
 
+### Fact Source, Adversary Profiles, and Scenarios
+
+This repo ships Caldera templates under `docs/`:
+
+* [`docs/sources/hvac-simulator-facts.yml`](docs/sources/hvac-simulator-facts.yml) - a fact source with the HVACSim device, read, and write facts. Copy it into `plugins/bacnet/data/sources/`.
+* [`docs/adversaries/`](docs/adversaries/) - three BACnet adversary profiles. Copy them into `plugins/bacnet/data/adversaries/`.
+* [`docs/scenarios/`](docs/scenarios/) - walkthroughs mapping each profile to ATT&CK for ICS techniques and the Caldera abilities it runs:
+  * [Scenario 1: Reconnaissance](docs/scenarios/scenario_1_reconnaissance.md)
+  * [Scenario 2: Thermal Runaway](docs/scenarios/scenario_2_thermal_runaway.md)
+  * [Scenario 3: Emergency Stop](docs/scenarios/scenario_3_emergency_stop.md)
+
+The ability UUIDs in the adversary profiles come from the [Caldera BACnet plugin](https://github.com/mitre/bacnet); the profiles reference them, they are not defined here.
+
 ## Help and Troubleshooting
 
 1. Ensure the `.ini` file has a valid BACnet device ID and IP address
@@ -275,7 +289,7 @@ This allows for simulation of:
 
    * No firewall blocks UDP/47808
    * Correct network interface is used
-3. Use `--debug bacpypes.udp` for verbose network logs
+3. Run with `python3 hvac_sim.py --debug` for verbose BACnet logs
 
 ## License
 
@@ -286,6 +300,6 @@ See the LICENSE file for details.
 
 * [Caldera](https://github.com/apache/caldera)
 * [Caldera for OT](https://github.com/mitre/caldera-ot)
-* [BACpypes](https://github.com/JoelBender/bacpypes)
+* [BAC0](https://pypi.org/project/bac0/)
 
 © 2026 THE MITRE CORPORATION. ALL RIGHTS RESERVED. APPROVED FOR PUBLIC RELEASE. DISTRIBUTION UNLIMITED PR_26-0182

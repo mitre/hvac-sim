@@ -1,0 +1,47 @@
+services:
+  hvac-sim:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    networks:
+      - bacnet-lab
+    # BACnet/IP uses UDP broadcast, so the sim binds to its container interface
+    # (see --address auto in the Dockerfile) rather than 0.0.0.0.
+    ports:
+      - "47808:47808/udp"
+
+  caldera:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.caldera
+    networks:
+      - bacnet-lab
+    ports:
+      - "8888:8888"
+      - "8443:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8888"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    networks:
+      - bacnet-lab
+    depends_on:
+      caldera:
+        condition: service_healthy
+    environment:
+      - CALDERA_SERVER=http://caldera:8888
+      - AGENT_GROUP=red
+
+networks:
+  bacnet-lab:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16

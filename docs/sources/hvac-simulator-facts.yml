@@ -1,0 +1,56 @@
+---
+
+id: c023c2fe-aa8e-46c0-8a97-107bc7c867de
+name: HVACSim Facts
+facts:
+
+# BACNET DEVICE FACTS
+
+- trait: bacnet.device.instance # HVACSim BACnet device instance
+  value: 101
+
+# BACNET READ FACTS
+
+- trait: bacnet.obj.type # Device object
+  value: device
+- trait: bacnet.obj.instance # Device object instance
+  value: 101
+- trait: bacnet.obj.property # Object list
+  value: 76
+- trait: bacnet.read.index # Whole array
+  value: -2
+- trait: bacnet.object.type # Sensor points (current temperature, chiller load)
+  value: analog-input
+- trait: bacnet.object.instance # current_temperature_c
+  value: 1
+- trait: bacnet.object.instance # chiller_speed_percent
+  value: 2
+
+# BACNET WRITE FACTS
+
+- trait: bacnet.obj.type # temperature_setpoint_c
+  value: analog-value
+- trait: bacnet.obj.type # intake / exhaust fan speed
+  value: analog-output
+- trait: bacnet.obj.type # emergency_stop
+  value: binary-value
+- trait: bacnet.obj.instance # setpoint (AV) / intake fan (AO) / emergency_stop (BV)
+  value: 1
+- trait: bacnet.obj.instance # exhaust fan (AO) / chiller sensor (AI)
+  value: 2
+- trait: bacnet.obj.property # Present value
+  value: present-value
+- trait: bacnet.write.priority # Manual operator priority
+  value: 8
+- trait: bacnet.write.index # Write entire property
+  value: -1
+- trait: bacnet.write.tag # Real, for analog values
+  value: 4
+- trait: bacnet.write.tag # Enumerated, for binary values
+  value: 9
+- trait: bacnet.write.value # Setpoint raised to disable cooling demand
+  value: 40
+- trait: bacnet.write.value # Fan forced off
+  value: 0
+- trait: bacnet.write.value # Emergency stop active
+  value: 1
