@@ -10,6 +10,20 @@ services:
     ports:
       - "47808:47808/udp"
 
+  web-hmi:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    # Its own container is its own BACnet stack, so it reads and writes the sim
+    # over the wire instead of touching the server's in-process objects.
+    entrypoint: ["python", "hmi.py", "--web", "--device-ip", "hvac-sim", "--web-port", "8090"]
+    networks:
+      - bacnet-lab
+    ports:
+      - "8090:8090"
+    depends_on:
+      - hvac-sim
+
   caldera:
     build:
       context: ..
