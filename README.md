@@ -275,7 +275,7 @@ This allows for simulation of:
 
 This repo ships Caldera templates under `docs/`:
 
-* [`docs/sources/hvac-facts.yml`](docs/sources/hvac-facts.yml) - a fact source with the HVACSim device, read, and write facts. Copy it into `plugins/bacnet/data/sources/`.
+* [`docs/sources/hvac-simulator-facts.yml`](docs/sources/hvac-simulator-facts.yml) - a fact source with the HVACSim device, read, and write facts. Copy it into `plugins/bacnet/data/sources/`.
 * [`docs/adversaries/`](docs/adversaries/) - three BACnet adversary profiles. Copy them into `plugins/bacnet/data/adversaries/`.
 * [`docs/scenarios/`](docs/scenarios/) - walkthroughs mapping each profile to ATT&CK for ICS techniques and the Caldera abilities it runs:
   * [Scenario 1: Reconnaissance](docs/scenarios/scenario_1_reconnaissance.md)

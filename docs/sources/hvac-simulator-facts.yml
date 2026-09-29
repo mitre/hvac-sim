@@ -1,15 +1,15 @@
 ---
 
 id: c023c2fe-aa8e-46c0-8a97-107bc7c867de
-name: HVACSim BACnet Facts
+name: HVACSim Facts
 facts:
 
-# DEVICE FACTS
+# BACNET DEVICE FACTS
 
 - trait: bacnet.device.instance # HVACSim BACnet device instance
   value: 101
 
-# READ / DISCOVERY FACTS
+# BACNET READ FACTS
 
 - trait: bacnet.obj.type # Device object
   value: device
@@ -26,7 +26,7 @@ facts:
 - trait: bacnet.object.instance # chiller_speed_percent
   value: 2
 
-# WRITE FACTS
+# BACNET WRITE FACTS
 
 - trait: bacnet.obj.type # temperature_setpoint_c
   value: analog-value

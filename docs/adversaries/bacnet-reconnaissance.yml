@@ -4,8 +4,8 @@ id: 3ae4da0b-fc5d-4bfc-919b-b32d4c020f45
 name: HVACSim BACnet Reconnaissance
 description: Read-only enumeration of the HVACSim device and its BACnet objects (no writes)
 atomic_ordering:
-  - b93bd80e-3a70-11eb-adc1-0242ac120002  # BACnet Who-Is (discover the device)
+  - b93bd80e-3a70-11eb-adc1-0242ac120002  # BACnet Who-Is
   - 485e97e7-c352-432d-b8d3-fa8460e4fe49  # BACnet Device Collection - Basic
-  - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic (object list)
-  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (current_temperature_c, AI:1)
-  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (chiller_speed_percent, AI:2)
+  - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic
+  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (temperature)
+  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (chiller)

@@ -5,7 +5,7 @@ name: HVACSim BACnet Thermal Runaway
 description: Raise the temperature setpoint and force both fans off to defeat cooling and drive the room hot
 atomic_ordering:
   - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic (baseline)
-  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (temperature_setpoint_c AV:1 -> high)
-  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (intake_fan_speed_percent AO:1 -> 0)
-  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (exhaust_fan_speed_percent AO:2 -> 0)
-  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (current_temperature_c AI:1 -> verify rising)
+  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (setpoint high)
+  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (intake fan off)
+  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (exhaust fan off)
+  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (verify rising)
