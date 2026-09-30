@@ -72,6 +72,16 @@ temperature_unit = celsius
 
 > **Temperature units:** Set `temperature_unit` to `celsius` or `fahrenheit` to choose the display unit used in the HMI visualization. The BACnet objects always use °C internally; this setting only affects what is shown on screen.
 
+### Docker
+
+`docker/docker-compose.yml` runs the sim, the web HMI, Caldera, and an agent on a shared bridge:
+
+```bash
+docker compose -f docker/docker-compose.yml up --build -d
+```
+
+BACnet/IP communicates over UDP port 47808. The server and the HMI both need that port, and two programs can't share one port on the same machine, so each runs in its own container and reaches the other over the network by IP.
+
 ## BACnet Object Map
 
 The simulator exposes the following BACnet objects:
