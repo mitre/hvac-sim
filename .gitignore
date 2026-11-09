@@ -1,6 +1,10 @@
 # MITRE SimEnv specific files to ignore
 config.yml
 
+# Wireshark captures
+docker/captures/*
+!docker/captures/.gitkeep
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

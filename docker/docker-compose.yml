@@ -1,24 +1,29 @@
+name: hvac-sim
+
 services:
   hvac-sim:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    init: true
     networks:
-      - bacnet-lab
+      - ot-lab
     # BACnet/IP uses UDP broadcast, so the sim binds to its container interface
     # (see --address auto in the Dockerfile) rather than 0.0.0.0.
     ports:
       - "47808:47808/udp"
+      - "127.0.0.1:3001:3001"
 
   web-hmi:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    init: true
     # Its own container is its own BACnet stack, so it reads and writes the sim
     # over the wire instead of touching the server's in-process objects.
     entrypoint: ["python", "hmi.py", "--web", "--device-ip", "hvac-sim", "--web-port", "8090"]
     networks:
-      - bacnet-lab
+      - ot-lab
     ports:
       - "8090:8090"
     depends_on:
@@ -28,8 +33,9 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.caldera
+    init: true
     networks:
-      - bacnet-lab
+      - ot-lab
     ports:
       - "8888:8888"
       - "8443:8443"
@@ -44,8 +50,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.agent
+    init: true
+    platform: linux/amd64
     networks:
-      - bacnet-lab
+      - ot-lab
     depends_on:
       caldera:
         condition: service_healthy
@@ -53,9 +61,28 @@ services:
       - CALDERA_SERVER=http://caldera:8888
       - AGENT_GROUP=red
 
+  capture:
+    image: lscr.io/linuxserver/wireshark:4.6.6-r0-ls328
+    profiles:
+      - capture
+    network_mode: "service:hvac-sim"
+    depends_on:
+      - hvac-sim
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    shm_size: "1gb"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=Etc/UTC
+    volumes:
+      - wireshark-config:/config
+      - ./captures:/config/Desktop
+
 networks:
-  bacnet-lab:
+  ot-lab:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.29.0.0/16
+
+volumes:
+  wireshark-config:
