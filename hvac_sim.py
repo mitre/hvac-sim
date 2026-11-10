@@ -88,6 +88,27 @@ def _primary_ip():
         s.close()
 
 
+def _primary_prefix(ip, default=16):
+    try:
+        import fcntl
+        import struct
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            for _, name in socket.if_nameindex():
+                req = struct.pack("256s", name.encode()[:15])
+                try:
+                    if socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, req)[20:24]) == ip:
+                        mask = fcntl.ioctl(s.fileno(), 0x891B, req)[20:24]
+                        return bin(int.from_bytes(mask, "big")).count("1")
+                except OSError:
+                    continue
+        finally:
+            s.close()
+    except (ImportError, OSError):
+        pass
+    return default
+
+
 async def _run_bacnet_and_hold(device_id: int, address: str, running_evt: threading.Event, debug: bool = False):
     """Start BAC0, register objects, expose underlying BACnet objects,
     and keep the asyncio loop alive while `running_evt` is set.
@@ -579,10 +600,11 @@ def main():
     use_fahrenheit = unit_str in ("f", "fahrenheit", "imperial")
 
     # "auto" binds to this host's primary interface (for containers, where the
-    # IP is assigned at runtime). An optional /prefix sets the subnet mask.
+    # IP is assigned at runtime) with its subnet mask. An optional /prefix overrides it.
     if address.split('/')[0] == "auto":
-        prefix = address.split('/')[1] if '/' in address else "16"
-        address = f"{_primary_ip()}/{prefix}"
+        ip = _primary_ip()
+        prefix = address.split('/')[1] if '/' in address else _primary_prefix(ip)
+        address = f"{ip}/{prefix}"
     elif '/' not in address:
         address = f"{address}/24"
 

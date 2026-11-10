@@ -84,6 +84,20 @@ docker compose -f docker/docker-compose.yml up --build -d
 
 BACnet/IP communicates over UDP port 47808. The server and the HMI both need that port, and two programs can't share one port on the same machine, so each runs in its own container and reaches the other over the network by IP.
 
+Caldera starts with the HVACSim fact source and adversaries loaded.
+
+On a Linux arm64 host, register amd64 emulation first (`docker run --privileged --rm tonistiigi/binfmt --install amd64`) so the agent can run. Docker Desktop already does this.
+
+### Packet Capture
+
+An optional Wireshark container shares the sim's network, so it sees the web HMI polling and the BACnet traffic from the Caldera agent:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile capture up -d capture
+```
+
+Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`.
+
 ## BACnet Object Map
 
 The simulator exposes the following BACnet objects:
