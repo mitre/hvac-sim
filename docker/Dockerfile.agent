@@ -1,6 +1,8 @@
-FROM alpine:3.19
+FROM ubuntu:24.04
 
-RUN apk add --no-cache curl bash
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl bash && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY docker/agent-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

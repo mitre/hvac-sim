@@ -86,6 +86,27 @@ def _primary_ip():
         s.close()
 
 
+def _primary_prefix(ip, default=16):
+    try:
+        import fcntl
+        import struct
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            for _, name in socket.if_nameindex():
+                req = struct.pack("256s", name.encode()[:15])
+                try:
+                    if socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, req)[20:24]) == ip:
+                        mask = fcntl.ioctl(s.fileno(), 0x891B, req)[20:24]
+                        return bin(int.from_bytes(mask, "big")).count("1")
+                except OSError:
+                    continue
+        finally:
+            s.close()
+    except (ImportError, OSError):
+        pass
+    return default
+
+
 def _as_bool(present_value):
     return str(present_value).strip().lower() in ("active", "1", "true")
 
@@ -503,7 +524,7 @@ def main():
     parser.add_argument("--web", action="store_true", help="Serve the HMI in a browser (WebAgg)")
     parser.add_argument("--web-port", type=int, default=8090, help="Web HMI port (default 8090)")
     parser.add_argument("--fahrenheit", action="store_true", help="Display temperatures in Fahrenheit")
-    parser.add_argument("--client-cidr", type=int, default=16, help="Client bind prefix; match the device subnet for Who-Is (default 16)")
+    parser.add_argument("--client-cidr", type=int, help="Client bind prefix; match the device subnet for Who-Is (default: detected from the interface, else 16)")
     args = parser.parse_args()
 
     # accept a hostname (e.g. the docker service name) or an IP; retry so the
@@ -529,7 +550,8 @@ def main():
     cmd_q = queue.Queue()
     data_buf = {k: deque(maxlen=600) for k in ["time", "temp", "setp", "chill", "intake", "exhaust"]}
 
-    client_ip = f"{_primary_ip()}/{args.client_cidr}"
+    ip = _primary_ip()
+    client_ip = f"{ip}/{args.client_cidr if args.client_cidr is not None else _primary_prefix(ip)}"
 
     def run_loop():
         asyncio.run(run_io(device_ip, client_ip, state, lock, cmd_q, data_buf))

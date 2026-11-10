@@ -9,6 +9,8 @@ Elijah Saloma and Jake Dickinson
 
 In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
 
+HVACSim is intended to grow open source collaboration in OT. We encourage forks and pull requests with improvements, new features, deployment notes, documentation, and tests.
+
 The students' original BACpypes version is preserved on the `bacpypes` branch. This version moves to the bac0 library, uses standard BACnet object types, and adds Caldera scenarios and a docker lab.
 
 ![HMI](./docs/images/Demo.gif)
@@ -81,6 +83,18 @@ docker compose -f docker/docker-compose.yml up --build -d
 ```
 
 BACnet/IP communicates over UDP port 47808. The server and the HMI both need that port, and two programs can't share one port on the same machine, so each runs in its own container and reaches the other over the network by IP.
+
+Caldera starts with the HVACSim fact source and adversaries loaded.
+
+### Packet Capture
+
+An optional Wireshark container shares the sim's network, so it sees the web HMI polling and the BACnet traffic from the Caldera agent:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile capture up -d capture
+```
+
+Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`.
 
 ## BACnet Object Map
 
@@ -314,4 +328,4 @@ See the LICENSE file for details.
 * [Caldera for OT](https://github.com/mitre/caldera-ot)
 * [BAC0](https://pypi.org/project/bac0/)
 
-© 2026 THE MITRE CORPORATION. ALL RIGHTS RESERVED. APPROVED FOR PUBLIC RELEASE. DISTRIBUTION UNLIMITED PR_26-0182
+© 2026 The MITRE Corporation. Approved for Public Release; Distribution Unlimited. Case Number 26-0182.
