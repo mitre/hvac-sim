@@ -12,6 +12,9 @@
 #   6. Reports pass/fail
 set -euo pipefail
 
+PY=python3
+"$PY" -c "" 2>/dev/null || PY=python
+
 CALDERA_URL="${CALDERA_URL:-http://localhost:8888}"
 SIM_SERVICE="${SIM_SERVICE:-hvac-sim}"
 DEVICE_INSTANCE="${DEVICE_INSTANCE:-101}"
@@ -53,9 +56,9 @@ done
 info "Waiting for a Sandcat agent to check in ..."
 for i in $(seq 1 40); do
     AGENTS=$(curl -sf -H "KEY:${API_KEY}" "${CALDERA_URL}/api/v2/agents" 2>/dev/null || echo "[]")
-    AGENT_COUNT=$(echo "${AGENTS}" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    AGENT_COUNT=$(echo "${AGENTS}" | "$PY" -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
     if [ "${AGENT_COUNT}" -gt 0 ]; then
-        AGENT_PAW=$(echo "${AGENTS}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['paw'])" 2>/dev/null)
+        AGENT_PAW=$(echo "${AGENTS}" | "$PY" -c "import sys,json; print(json.load(sys.stdin)[0]['paw'])" 2>/dev/null)
         if [ -z "${AGENT_PAW}" ]; then fail "Could not read the agent paw"; fi
         pass "Agent registered (paw=${AGENT_PAW})"
         break
@@ -67,7 +70,7 @@ done
 # ── Step 4: Find a BACnet Read Property ability ─────────────────────
 info "Looking for a BACnet Read Property ability ..."
 ABILITIES=$(curl -sf -H "KEY:${API_KEY}" "${CALDERA_URL}/api/v2/abilities" 2>/dev/null || echo "[]")
-ABILITY_ID=$(echo "${ABILITIES}" | python3 -c "
+ABILITY_ID=$(echo "${ABILITIES}" | "$PY" -c "
 import sys, json
 abilities = json.load(sys.stdin)
 for a in abilities:
@@ -81,7 +84,7 @@ else:
 
 if [ -z "${ABILITY_ID}" ]; then
     info "BACnet Read Property ability not found -- listing available BACnet abilities:"
-    echo "${ABILITIES}" | python3 -c "
+    echo "${ABILITIES}" | "$PY" -c "
 import sys, json
 abilities = json.load(sys.stdin)
 for a in abilities:
@@ -113,7 +116,7 @@ ADVERSARY_RESP=$(curl -sf -X POST -H "KEY:${API_KEY}" \
     }" \
     "${CALDERA_URL}/api/v2/adversaries/${ADVERSARY_ID}" 2>/dev/null \
   || echo "{}")
-if [ -z "$(echo "${ADVERSARY_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('adversary_id',''))" 2>/dev/null)" ]; then
+if [ -z "$(echo "${ADVERSARY_RESP}" | "$PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('adversary_id',''))" 2>/dev/null)" ]; then
     fail "Failed to create/update adversary. Response: ${ADVERSARY_RESP}"
 fi
 pass "Adversary profile ready (id=${ADVERSARY_ID})"
@@ -149,7 +152,7 @@ OP_RESP=$(curl -sf -X POST -H "KEY:${API_KEY}" \
     }" \
     "${CALDERA_URL}/api/v2/operations" 2>/dev/null || echo "{}")
 
-OP_ID=$(echo "${OP_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+OP_ID=$(echo "${OP_RESP}" | "$PY" -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 
 if [ -z "${OP_ID}" ]; then
     fail "Failed to create operation. Response: ${OP_RESP}"
@@ -161,7 +164,7 @@ info "Waiting for the read to run ..."
 for i in $(seq 1 60); do
     OP_STATUS=$(curl -sf -H "KEY:${API_KEY}" \
         "${CALDERA_URL}/api/v2/operations/${OP_ID}" 2>/dev/null || echo "{}")
-    LINK_ID=$(echo "${OP_STATUS}" | python3 -c "
+    LINK_ID=$(echo "${OP_STATUS}" | "$PY" -c "
 import sys, json
 done = [l for l in json.load(sys.stdin).get('chain', []) if l.get('finish')]
 print(done[0]['id'] if done else '')
@@ -180,7 +183,7 @@ curl -sf -X PATCH -H "KEY:${API_KEY}" -H "Content-Type: application/json" \
 
 # ── Step 8: Check the read returned a value ─────────────────────────
 OUTPUT=$(curl -sf -H "KEY:${API_KEY}" \
-    "${CALDERA_URL}/api/v2/operations/${OP_ID}/links/${LINK_ID}/result" 2>/dev/null | python3 -c "
+    "${CALDERA_URL}/api/v2/operations/${OP_ID}/links/${LINK_ID}/result" 2>/dev/null | "$PY" -c "
 import sys, json, base64
 result = base64.b64decode(json.load(sys.stdin).get('result', '')).decode(errors='replace')
 print(json.loads(result).get('stdout', '').strip())
