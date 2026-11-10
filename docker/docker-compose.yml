@@ -21,7 +21,7 @@ services:
     init: true
     # Its own container is its own BACnet stack, so it reads and writes the sim
     # over the wire instead of touching the server's in-process objects.
-    entrypoint: ["python", "hmi.py", "--web", "--device-ip", "hvac-sim", "--web-port", "8090"]
+    entrypoint: ["python", "-m", "simulator.hmi", "--web", "--device-ip", "hvac-sim", "--web-port", "8090"]
     networks:
       - ot-lab
     ports:
