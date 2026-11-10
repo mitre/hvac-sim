@@ -11,7 +11,7 @@ In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org))
 
 HVACSim is intended to grow open source collaboration in OT. We encourage forks and pull requests with improvements, new features, deployment notes, documentation, and tests.
 
-The students' original BACpypes version is preserved on the `bacpypes` branch. This version moves to the bac0 library, uses standard BACnet object types, and adds Caldera scenarios and a docker lab.
+The students' original BACpypes version is preserved in the [v1.0.0 release](https://github.com/mitre/hvac-sim/releases/tag/v1.0.0). This version moves to the bac0 library, uses standard BACnet object types, and adds Caldera scenarios and a docker lab.
 
 ![HMI](./docs/images/Demo.gif)
 
