@@ -86,8 +86,6 @@ BACnet/IP communicates over UDP port 47808. The server and the HMI both need tha
 
 Caldera starts with the HVACSim fact source and adversaries loaded.
 
-On a Linux arm64 host, register amd64 emulation first (`docker run --privileged --rm tonistiigi/binfmt --install amd64`) so the agent can run. Docker Desktop already does this.
-
 ### Packet Capture
 
 An optional Wireshark container shares the sim's network, so it sees the web HMI polling and the BACnet traffic from the Caldera agent:
