@@ -10,12 +10,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source
-COPY hvac_sim.py .
-COPY hmi.py .
+COPY simulator/ simulator/
 COPY config.ini .
 
 # BACnet/IP and web HMI
 EXPOSE 47808/udp 8090
 
-# Headless: bind to the container's primary interface and skip the HMI.
-ENTRYPOINT ["python", "hvac_sim.py", "--no-hmi", "--address", "auto"]
+# Bind to the container's primary interface and its subnet mask.
+ENTRYPOINT ["python", "-m", "simulator.plc", "--ini", "config.ini", "--address", "auto"]

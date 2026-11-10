@@ -72,6 +72,8 @@ address = 127.0.0.1/24
 temperature_unit = celsius
 ```
 
+> **Address:** `address` is the interface the BACnet device binds to, with the subnet mask it answers Who-Is on. Pass `--address auto` to take both from the host's primary interface, which is what the containers under docker/ do.
+
 > **Temperature units:** Set `temperature_unit` to `celsius` or `fahrenheit` to choose the display unit used in the HMI visualization. The BACnet objects always use °C internally; this setting only affects what is shown on screen.
 
 ### Docker
@@ -118,18 +120,28 @@ the emergency stop is a Binary Value. Instances are numbered per type from 1.
 ### Step 1: Start the Simulator
 
 ```bash
-python3 hvac_sim.py --ini ./config.ini
+python3 -m simulator.plc --ini ./config.ini
 ```
 
-Launching the script does three things:
+Launching the simulator does two things:
 
 1. Starts the BACnet/IP device
 2. Spawns the HVAC control loop thread
-3. Opens the interactive HMI dashboard
+
+The simulator no longer draws its own window. Read and write its points over
+BACnet, with the HMI in Step 2 or with Caldera.
 
 If the program fails to start, verify Python, dependencies, and the `.ini` file. Any exceptions should be printed in the console.
 
-### Step 2: Read/Write Properties
+### Step 2: Start the HMI
+
+Run the HMI on a different machine or container than the simulator, since BACnet/IP needs UDP 47808 on each end. On a single machine, run them with Docker.
+
+```bash
+python3 -m simulator.hmi --device-ip <simulator IP>
+```
+
+### Step 3: Read/Write Properties
 
 To "attack" the device, one can access property values (i.e., read) and modify them as desired (i.e., write). Below is an example of the commands to set in the adversary profile in Caldera (or through CLI):
 
@@ -246,7 +258,7 @@ When emergency stop is triggered:
 
 ## HMI Features
 
-When launched, HVACSim displays an HMI containing:
+The HMI window contains:
 
 **Main Temperature Graph**
 
@@ -266,7 +278,7 @@ When launched, HVACSim displays an HMI containing:
 * Exhaust fan slider (%)
 * Emergency-stop toggle button
 
-Closing the window shuts down the control loop and BACnet stack.
+Closing the window stops the HMI; the simulator keeps running.
 
 ## Using HVACSim with Caldera
 
@@ -315,7 +327,7 @@ The ability UUIDs in the adversary profiles come from the [Caldera BACnet plugin
 
    * No firewall blocks UDP/47808
    * Correct network interface is used
-3. Run with `python3 hvac_sim.py --debug` for verbose BACnet logs
+3. Run with `python3 -m simulator.plc --debug` for verbose BACnet logs
 
 ## License
 
