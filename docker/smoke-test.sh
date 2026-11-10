@@ -1,16 +1,19 @@
 #!/bin/bash
 # End-to-end smoke test for the Caldera OT + HVACSim (BACnet) integration.
 #
-# Prerequisites: docker compose up --build  (all services running)
+# Prerequisites: docker compose -f docker/docker-compose.yml up --build -d
 #
 # This script:
 #   1. Waits for the HVACSim container to bring its BACnet objects up
 #   2. Waits for Caldera to be healthy
 #   3. Waits for a Sandcat agent to check in
 #   4. Creates an adversary with a BACnet read ability
-#   5. Runs an operation against HVACSim (device instance 101) and waits for it to finish
+#   5. Runs an operation against HVACSim (device instance 101) and checks the read returned a value
 #   6. Reports pass/fail
 set -euo pipefail
+
+PY=python3
+"$PY" -c "" 2>/dev/null || PY=python
 
 CALDERA_URL="${CALDERA_URL:-http://localhost:8888}"
 SIM_SERVICE="${SIM_SERVICE:-hvac-sim}"
@@ -30,11 +33,11 @@ info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 # ── Step 1: Wait for HVACSim BACnet objects ─────────────────────────
 info "Waiting for HVACSim BACnet objects to come up ..."
 for i in $(seq 1 30); do
-    if docker compose logs "${SIM_SERVICE}" 2>/dev/null | grep -q "objects up"; then
+    if docker compose -f "$(dirname "$0")/docker-compose.yml" logs "${SIM_SERVICE}" 2>/dev/null | grep "BACnet device ready" >/dev/null; then
         pass "HVACSim BACnet objects are up"
         break
     fi
-    if [ "$i" -eq 30 ]; then fail "HVACSim did not report 'objects up' after 30 attempts"; fi
+    if [ "$i" -eq 30 ]; then fail "HVACSim did not report 'BACnet device ready' after 30 attempts"; fi
     sleep 2
 done
 
@@ -53,9 +56,10 @@ done
 info "Waiting for a Sandcat agent to check in ..."
 for i in $(seq 1 40); do
     AGENTS=$(curl -sf -H "KEY:${API_KEY}" "${CALDERA_URL}/api/v2/agents" 2>/dev/null || echo "[]")
-    AGENT_COUNT=$(echo "${AGENTS}" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    AGENT_COUNT=$(echo "${AGENTS}" | "$PY" -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
     if [ "${AGENT_COUNT}" -gt 0 ]; then
-        AGENT_PAW=$(echo "${AGENTS}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['paw'])" 2>/dev/null)
+        AGENT_PAW=$(echo "${AGENTS}" | "$PY" -c "import sys,json; print(json.load(sys.stdin)[0]['paw'])" 2>/dev/null)
+        if [ -z "${AGENT_PAW}" ]; then fail "Could not read the agent paw"; fi
         pass "Agent registered (paw=${AGENT_PAW})"
         break
     fi
@@ -66,12 +70,12 @@ done
 # ── Step 4: Find a BACnet Read Property ability ─────────────────────
 info "Looking for a BACnet Read Property ability ..."
 ABILITIES=$(curl -sf -H "KEY:${API_KEY}" "${CALDERA_URL}/api/v2/abilities" 2>/dev/null || echo "[]")
-ABILITY_ID=$(echo "${ABILITIES}" | python3 -c "
+ABILITY_ID=$(echo "${ABILITIES}" | "$PY" -c "
 import sys, json
 abilities = json.load(sys.stdin)
 for a in abilities:
     name = a.get('name', '').lower()
-    if 'read property' in name:
+    if name == 'bacnet read property':
         print(a['ability_id'])
         break
 else:
@@ -80,7 +84,7 @@ else:
 
 if [ -z "${ABILITY_ID}" ]; then
     info "BACnet Read Property ability not found -- listing available BACnet abilities:"
-    echo "${ABILITIES}" | python3 -c "
+    echo "${ABILITIES}" | "$PY" -c "
 import sys, json
 abilities = json.load(sys.stdin)
 for a in abilities:
@@ -112,12 +116,30 @@ ADVERSARY_RESP=$(curl -sf -X POST -H "KEY:${API_KEY}" \
     }" \
     "${CALDERA_URL}/api/v2/adversaries/${ADVERSARY_ID}" 2>/dev/null \
   || echo "{}")
-if [ -z "$(echo "${ADVERSARY_RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('adversary_id',''))" 2>/dev/null)" ]; then
+if [ -z "$(echo "${ADVERSARY_RESP}" | "$PY" -c "import sys,json; d=json.load(sys.stdin); print(d.get('adversary_id',''))" 2>/dev/null)" ]; then
     fail "Failed to create/update adversary. Response: ${ADVERSARY_RESP}"
 fi
 pass "Adversary profile ready (id=${ADVERSARY_ID})"
 
 # ── Step 6: Create and run an operation ─────────────────────────────
+info "Creating fact source ..."
+SOURCE_ID="smoke-test-source"
+curl -sf -X PUT -H "KEY:${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"id\": \"${SOURCE_ID}\",
+        \"name\": \"BACnet Smoke Test Source\",
+        \"facts\": [
+            {\"trait\": \"bacnet.device.instance\", \"value\": \"${DEVICE_INSTANCE}\"},
+            {\"trait\": \"bacnet.obj.type\", \"value\": \"analog-input\"},
+            {\"trait\": \"bacnet.obj.instance\", \"value\": \"1\"},
+            {\"trait\": \"bacnet.obj.property\", \"value\": \"present-value\"},
+            {\"trait\": \"bacnet.read.index\", \"value\": \"-1\"}
+        ]
+    }" \
+    "${CALDERA_URL}/api/v2/sources/${SOURCE_ID}" >/dev/null 2>&1 || fail "Failed to create the fact source"
+pass "Fact source ready (id=${SOURCE_ID})"
+
 info "Creating operation ..."
 OP_RESP=$(curl -sf -X POST -H "KEY:${API_KEY}" \
     -H "Content-Type: application/json" \
@@ -126,42 +148,50 @@ OP_RESP=$(curl -sf -X POST -H "KEY:${API_KEY}" \
         \"adversary\": {\"adversary_id\": \"${ADVERSARY_ID}\"},
         \"group\": \"red\",
         \"auto_close\": true,
-        \"source\": {
-            \"name\": \"BACnet Smoke Test Source\",
-            \"facts\": [
-                {\"trait\": \"bacnet.device.instance\", \"value\": \"${DEVICE_INSTANCE}\"},
-                {\"trait\": \"bacnet.object.type\", \"value\": \"analog-input\"},
-                {\"trait\": \"bacnet.object.instance\", \"value\": \"1\"},
-                {\"trait\": \"bacnet.obj.property\", \"value\": \"present-value\"},
-                {\"trait\": \"bacnet.read.index\", \"value\": \"-1\"}
-            ]
-        }
+        \"source\": {\"id\": \"${SOURCE_ID}\"}
     }" \
     "${CALDERA_URL}/api/v2/operations" 2>/dev/null || echo "{}")
 
-OP_ID=$(echo "${OP_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+OP_ID=$(echo "${OP_RESP}" | "$PY" -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 
 if [ -z "${OP_ID}" ]; then
     fail "Failed to create operation. Response: ${OP_RESP}"
 fi
 pass "Operation created (id=${OP_ID})"
 
-# ── Step 7: Wait for the operation to finish ────────────────────────
-info "Waiting for operation to complete ..."
+# ── Step 7: Wait for the read to run ────────────────────────────────
+info "Waiting for the read to run ..."
 for i in $(seq 1 60); do
     OP_STATUS=$(curl -sf -H "KEY:${API_KEY}" \
         "${CALDERA_URL}/api/v2/operations/${OP_ID}" 2>/dev/null || echo "{}")
-    STATE=$(echo "${OP_STATUS}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','unknown'))" 2>/dev/null || echo "unknown")
-
-    if [ "${STATE}" = "finished" ] || [ "${STATE}" = "cleanup" ]; then
-        pass "Operation finished (state=${STATE})"
+    LINK_ID=$(echo "${OP_STATUS}" | "$PY" -c "
+import sys, json
+done = [l for l in json.load(sys.stdin).get('chain', []) if l.get('finish')]
+print(done[0]['id'] if done else '')
+" 2>/dev/null || echo "")
+    if [ -n "${LINK_ID}" ]; then
+        pass "Read ran (link=${LINK_ID})"
         break
     fi
     if [ "$i" -eq 60 ]; then
-        fail "Operation did not finish after 60 attempts (state=${STATE})"
+        fail "The read did not run after 60 attempts (check the fact source)"
     fi
     sleep 5
 done
+curl -sf -X PATCH -H "KEY:${API_KEY}" -H "Content-Type: application/json" \
+    -d '{"state": "finished"}' "${CALDERA_URL}/api/v2/operations/${OP_ID}" >/dev/null 2>&1 || true
+
+# ── Step 8: Check the read returned a value ─────────────────────────
+OUTPUT=$(curl -sf -H "KEY:${API_KEY}" \
+    "${CALDERA_URL}/api/v2/operations/${OP_ID}/links/${LINK_ID}/result" 2>/dev/null | "$PY" -c "
+import sys, json, base64
+result = base64.b64decode(json.load(sys.stdin).get('result', '')).decode(errors='replace')
+print(json.loads(result).get('stdout', '').strip())
+" 2>/dev/null || echo "")
+if [ -z "${OUTPUT}" ] || echo "${OUTPUT}" | grep -qi "error"; then
+    fail "Read Property returned no value: ${OUTPUT}"
+fi
+pass "Read Property returned ${OUTPUT}"
 
 # ── Summary ─────────────────────────────────────────────────────────
 echo ""
