@@ -329,6 +329,23 @@ The ability UUIDs in the adversary profiles come from the [Caldera BACnet plugin
    * Correct network interface is used
 3. Run with `python3 -m simulator.plc --debug` for verbose BACnet logs
 
+## Other Simulators
+
+MITRE provides other open-source simulators for testing the Caldera for OT plugins
+without physical hardware.
+
+### [Aloha Water Treatment](https://github.com/mitre/aloha-water-treatment)
+
+Aloha Water Treatment is a simulated water treatment plant with Modbus and BACnet process control.
+
+### [Grid Watch](https://github.com/mitre/grid-watch)
+
+Grid Watch is a simulated electrical grid outstation that mimics the behavior of a real-world DNP3 device.
+
+### [Wildcat Dam](https://github.com/mitre/wildcatdam)
+
+Wildcat Dam is a simulated dam controller that mimics the behavior of a real-world Modbus device.
+
 ## License
 
 This project is licensed under the Apache-2.0 License.
