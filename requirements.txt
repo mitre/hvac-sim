@@ -1,5 +1,4 @@
-pyasyncore==1.0.4
-pyyaml==6.0.3
+BAC0==2025.9.15
+bacpypes3==0.0.110
 matplotlib==3.10.9
-bac0==2025.9.15
 tornado==6.5.10

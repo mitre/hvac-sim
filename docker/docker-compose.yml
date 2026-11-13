@@ -1,44 +1,61 @@
 name: hvac-sim
 
 services:
-  hvac-sim:
+  plc:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     init: true
     networks:
       - ot-lab
-    # BACnet/IP uses UDP broadcast, so the sim binds to its container interface
-    # (see --address auto in the Dockerfile) rather than 0.0.0.0.
+    # BACnet/IP uses UDP broadcast, so the PLC binds to its container interface
+    # (--host auto) rather than 0.0.0.0. Discovery broadcasts do not cross
+    # Docker's port publishing, so 47808 is not published to the host.
+    # 3001 is the capture sidecar's web UI: the sidecar shares this container's
+    # network namespace, so its port is published here.
     ports:
-      - "47808:47808/udp"
       - "127.0.0.1:3001:3001"
+    # BACnet has no TCP port to probe, so send a Who-Is and wait for the I-Am.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; from simulator.network import primary_ip; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(2); s.sendto(bytes.fromhex('810a000801001008'), (primary_ip(), 47808)); s.recv(64)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-  web-hmi:
+  hmi:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     init: true
-    # Its own container is its own BACnet stack, so it reads and writes the sim
+    # Its own container is its own BACnet stack, so it reads and writes the PLC
     # over the wire instead of touching the server's in-process objects.
-    entrypoint: ["python", "-m", "simulator.hmi", "--web", "--device-ip", "hvac-sim", "--web-port", "8090"]
+    entrypoint: ["python", "-m", "simulator.hmi", "--web", "--host", "plc", "--port", "47808", "--web-port", "8090"]
     networks:
       - ot-lab
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     depends_on:
-      - hvac-sim
+      plc:
+        condition: service_healthy
 
   caldera:
     build:
       context: ..
       dockerfile: docker/Dockerfile.caldera
     init: true
+    depends_on:
+      plc:
+        condition: service_healthy
     networks:
       - ot-lab
     ports:
-      - "8888:8888"
-      - "8443:8443"
+      - "127.0.0.1:8888:8888"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8888"]
       interval: 10s
@@ -51,6 +68,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.agent
     init: true
+    # The plugins' Linux payloads are amd64 glibc binaries with no arm64
+    # build, so the whole container runs as amd64 (emulated on arm64 hosts).
     platform: linux/amd64
     networks:
       - ot-lab
@@ -65,9 +84,9 @@ services:
     image: lscr.io/linuxserver/wireshark:4.6.6-r0-ls328
     profiles:
       - capture
-    network_mode: "service:hvac-sim"
+    network_mode: "service:plc"
     depends_on:
-      - hvac-sim
+      - plc
     cap_add:
       - NET_ADMIN
       - NET_RAW

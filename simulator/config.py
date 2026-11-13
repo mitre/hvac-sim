@@ -3,7 +3,10 @@ Device configuration from the INI file, shared by the PLC.
 """
 
 import configparser
+import logging
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -15,10 +18,10 @@ class SimConfig:
 def load_config(path) -> SimConfig:
     cfg = configparser.ConfigParser()
     if not cfg.read(path):
-        print(f"[HVACSim] Warning: Configuration file '{path}' not found or could not be read; using default settings.")
+        logger.warning("Configuration file %s not found or could not be read; using default settings", path)
         return SimConfig()
     if "HVACSim" not in cfg:
-        print(f"[HVACSim] Warning: INI file '{path}' is missing [HVACSim] section; using default settings.")
+        logger.warning("Configuration file %s has no [HVACSim] section; using default settings", path)
         return SimConfig()
     sec = cfg["HVACSim"]
     return SimConfig(

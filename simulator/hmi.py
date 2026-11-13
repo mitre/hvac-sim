@@ -6,32 +6,31 @@ draws the dashboard from what it read. Serve it in a browser with --web
 BACnet/IP needs UDP 47808 on each end.
 
 To run:
-    python3 -m simulator.hmi --device-ip 192.168.1.50
-    python3 -m simulator.hmi --device-ip 192.168.1.50 --web --web-port 8090
-
-Authors:
-    Capstone Group:
-        University of Hawaii at Manoa Group 9 2025
-
-    Developers:
-        * Jake Dickinson
-        * Elijah Saloma
-
-    Advisor:
-        * Samir Boussarhane
+    python -m simulator.hmi --host 192.168.1.50
+    python -m simulator.hmi --host 192.168.1.50 --web --web-port 8090
 """
 
 import argparse
 import asyncio
+import logging
 import queue
+import signal
 import socket
+import sys
 import threading
 import time
 from collections import deque
 
 import BAC0
+from bacpypes3.pdu import Address
 
+from simulator import SIM
+from simulator.cli import add_deprecated_alias, warn_deprecated
 from simulator.network import primary_ip, primary_prefix
+
+PROTOCOL = SIM["protocols"]["bacnet"]
+DEFAULT_PORT = PROTOCOL["port"]
+TITLE = f"{PROTOCOL['name']} - {SIM['name']}"
 
 # Our own client instance, kept off the server's 101 so they do not collide.
 CLIENT_DEVICE_ID = 9101
@@ -45,6 +44,8 @@ OBJECTS = {
     "exhaust": ("analogOutput", 2),
     "estop": ("binaryValue", 1),
 }
+
+logger = logging.getLogger(__name__)
 
 
 class State:
@@ -62,8 +63,12 @@ def _as_bool(present_value):
     return str(present_value).strip().lower() in ("active", "1", "true")
 
 
-async def _whois(bacnet, device_id=None):
-    return await bacnet.this_application.app.who_is(device_id, device_id)
+async def _whois(bacnet, device_id=None, addr=None):
+    app = bacnet.this_application.app
+    found = await app.who_is(device_id, device_id)
+    if not found and addr:
+        found = await app.who_is(device_id, device_id, address=Address(addr))
+    return found
 
 
 async def poll_device(bacnet, addr, device_id, state, lock, data_buf):
@@ -94,18 +99,17 @@ async def poll_device(bacnet, addr, device_id, state, lock, data_buf):
                 data_buf["exhaust"].append(exhaust)
 
             if int(now) % 10 == 0:
-                print(
-                    f"[HMI] Tset={setp:.1f}°C | T={temp:.1f}°C | "
-                    f"Intake={intake:.0f}% | Exhaust={exhaust:.0f}% | "
-                    f"Chiller={chiller:.0f}% | E-Stop={'ON' if estop else 'OFF'}"
+                logger.info(
+                    "Tset=%.1f°C | T=%.1f°C | Intake=%.0f%% | Exhaust=%.0f%% | Chiller=%.0f%% | E-Stop=%s",
+                    setp, temp, intake, exhaust, chiller, "ON" if estop else "OFF",
                 )
 
         except Exception as e:
             with lock:
                 state.connected = False
-            print(f"[HMI] Read failed: {e}; rediscovering")
+            logger.warning("Read failed: %s; rediscovering", e)
             try:
-                await _whois(bacnet, device_id)
+                await _whois(bacnet, device_id, addr)
             except Exception:
                 pass
 
@@ -130,40 +134,68 @@ async def send_commands(bacnet, addr, cmd_q):
         args = f"{addr} {obj_type} {instance} presentValue {payload} - {WRITE_PRIORITY}"
         try:
             await bacnet._write(args)
-            print(f"[HMI] WRITE {control} <- {payload}")
+            logger.info("Write: %s <- %s", control, payload)
         except Exception as e:
-            print(f"[HMI] Write failed ({control}={payload}): {e}")
+            logger.error("Write failed (%s=%s): %s", control, payload, e)
 
 
-async def run_io(device_ip, device_id, client_ip, state, lock, cmd_q, data_buf):
+async def run_io(device_addr, device_id, client_ip, state, lock, cmd_q, data_buf):
     bacnet = BAC0.lite(ip=client_ip, deviceId=CLIENT_DEVICE_ID, ping=False)
     await asyncio.sleep(2.0)
-    print(f"[HMI] BACnet client ready on {client_ip} (ID {CLIENT_DEVICE_ID})")
+    logger.info("BACnet client %s on %s", CLIENT_DEVICE_ID, client_ip)
 
     # A directed WhoIs (what BAC0.read falls back to) is answered unreliably
     # here, so a broadcast WhoIs seeds the address cache and later reads skip it.
+    # The broadcast only reaches the default port, so a PLC on another port gets
+    # the directed one.
     for _ in range(30):
-        if await _whois(bacnet, device_id):
+        if await _whois(bacnet, device_id, device_addr):
             break
         await asyncio.sleep(2.0)
-    print(f"[HMI] Talking to device {device_id} at {device_ip}")
 
     await asyncio.gather(
-        poll_device(bacnet, device_ip, device_id, state, lock, data_buf),
-        send_commands(bacnet, device_ip, cmd_q),
+        poll_device(bacnet, device_addr, device_id, state, lock, data_buf),
+        send_commands(bacnet, device_addr, cmd_q),
     )
 
 
+def _interrupt(_sig, _frm):
+    raise KeyboardInterrupt
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Web HMI client for the HVAC BACnet device")
-    parser.add_argument("--device-ip", required=True, help="IP or hostname of the HVAC BACnet device")
-    parser.add_argument("--device-id", type=int, default=101, help="Device instance (default 101)")
-    parser.add_argument("--web", action="store_true", help="Serve the HMI in a browser (WebAgg)")
-    parser.add_argument("--web-port", type=int, default=8090, help="Web HMI port (default 8090)")
-    parser.add_argument("--fahrenheit", action="store_true", help="Display temperatures in Fahrenheit")
-    parser.add_argument("--client-cidr", type=int, help="Client bind prefix; match the device subnet for Who-Is (default: detected from the interface, else 24)")
+    parser = argparse.ArgumentParser(
+        prog="python -m simulator.hmi",
+        description=f"{SIM['name']} HMI: polls the PLC over BACnet/IP and draws the dashboard.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", metavar="HOST", help="PLC to poll (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, metavar="PORT", help=f"PLC port (default: {DEFAULT_PORT})")
+    parser.add_argument("--web", action="store_true", help="serve the HMI as a web page instead of a desktop window")
+    parser.add_argument("--web-port", type=int, default=8090, metavar="PORT", help="web HMI port (default: 8090)")
+    parser.add_argument("--device-id", type=int, default=101, metavar="ID", help="PLC device instance (default: 101)")
+    parser.add_argument("--fahrenheit", action="store_true", help="show temperatures in Fahrenheit")
+    parser.add_argument("--client-cidr", type=int, metavar="PREFIX", help="prefix length for the HMI's own BACnet address; match the PLC's subnet (default: read from the interface, else 24)")
+    parser.add_argument("--debug", action="store_true", help="debug logging")
+    add_deprecated_alias(parser, "--device-ip", "--host")
     args = parser.parse_args()
 
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        level=logging.DEBUG if args.debug else logging.INFO,
+    )
+    warn_deprecated(args)
+    logging.getLogger("BAC0_Root").propagate = False
+    logging.getLogger("tornado.access").setLevel(logging.WARNING)
+    signal.signal(signal.SIGTERM, _interrupt)
+    try:
+        run(args)
+    except KeyboardInterrupt:
+        pass
+    logger.info("Stopped")
+    return 0
+
+
+def run(args):
     import matplotlib
     if args.web:
         matplotlib.use("WebAgg")
@@ -172,21 +204,24 @@ def main():
 
     # accept a hostname (e.g. the docker service name) or an IP; retry so the
     # HMI can start before the device's name resolves
-    device_ip = args.device_ip
+    device_ip = args.host
     for _ in range(60):
         try:
-            device_ip = socket.gethostbyname(args.device_ip)
+            device_ip = socket.gethostbyname(args.host)
             break
         except socket.gaierror:
             time.sleep(2)
+    device_addr = f"{device_ip}:{args.port}"
 
-    BAC0.log_level("silence")
+    if not args.debug:
+        BAC0.log_level("silence")
+        logging.getLogger("bacpypes3").setLevel(logging.CRITICAL)
 
     if args.web:
         plt.rcParams["webagg.address"] = "0.0.0.0"
         plt.rcParams["webagg.port"] = args.web_port
         plt.rcParams["webagg.open_in_browser"] = False
-        _webagg_fill_window()
+        _webagg_fill_window(TITLE)
 
     state = State()
     lock = threading.Lock()
@@ -197,8 +232,9 @@ def main():
     client_ip = f"{ip}/{args.client_cidr if args.client_cidr is not None else primary_prefix(ip)}"
 
     def run_loop():
-        asyncio.run(run_io(device_ip, args.device_id, client_ip, state, lock, cmd_q, data_buf))
+        asyncio.run(run_io(device_addr, args.device_id, client_ip, state, lock, cmd_q, data_buf))
 
+    logger.info("Polling PLC at %s:%s", args.host, args.port)
     threading.Thread(target=run_loop, name="bacnet-io", daemon=True).start()
 
     # Wait for the first reads so the sliders start from live values.
@@ -208,12 +244,13 @@ def main():
                 break
         time.sleep(0.1)
 
-    use_fahrenheit = args.fahrenheit
-    start_plot(data_buf, state, lock, cmd_q, use_fahrenheit=use_fahrenheit)
+    if args.web:
+        logger.info("Web HMI at http://0.0.0.0:%s", args.web_port)
+    start_plot(data_buf, state, lock, cmd_q, use_fahrenheit=args.fahrenheit, title=TITLE)
 
 
 if __name__ == "__main__":
     import warnings
     warnings.filterwarnings("ignore", message="no signal handlers for child threads")
 
-    main()
+    sys.exit(main())

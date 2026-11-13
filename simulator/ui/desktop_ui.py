@@ -1,17 +1,6 @@
 """
-Matplotlib dashboard for the HVAC HMI. Draws what the bridge polled and queues
+Matplotlib dashboard for the HVAC HMI. Draws what the HMI polled and queues
 operator writes; it never talks BACnet itself.
-
-Authors:
-    Capstone Group:
-        University of Hawaii at Manoa Group 9 2025
-
-    Developers:
-        * Jake Dickinson
-        * Elijah Saloma
-
-    Advisor:
-        * Samir Boussarhane
 """
 
 import matplotlib.pyplot as plt
@@ -19,7 +8,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Slider, Button, TextBox
 
 
-def start_plot(data_buf, state, lock, cmd_q, use_fahrenheit=False):
+def start_plot(data_buf, state, lock, cmd_q, use_fahrenheit=False, title=None):
     unit = "°F" if use_fahrenheit else "°C"
     setp_min = 60.0 if use_fahrenheit else 15.0
     setp_max = 95.0 if use_fahrenheit else 35.0
@@ -49,8 +38,7 @@ def start_plot(data_buf, state, lock, cmd_q, use_fahrenheit=False):
         }
     )
 
-    fig = plt.figure(figsize=(11, 6))
-    fig.canvas.manager.set_window_title("Server Room HMI")
+    fig = plt.figure(num=title, figsize=(11, 6))
 
     gs = fig.add_gridspec(
         4,
@@ -291,15 +279,17 @@ def start_plot(data_buf, state, lock, cmd_q, use_fahrenheit=False):
     plt.show()
 
 
-def _webagg_fill_window():
+def _webagg_fill_window(title):
     # Size the WebAgg figure to the browser window instead of a fixed canvas
     # that scrolls. mpl.js already re-renders the figure when its canvas
     # container resizes, so we just size that container to the window.
     import io
+    import json
     from matplotlib.backends import backend_webagg_core as wac
 
     js = """
 (function(){
+  document.title=TITLE;
   function fit(){
     var c=document.querySelector('.mpl-canvas');if(!c)return false;
     var cd=c.parentElement;
@@ -319,7 +309,7 @@ def _webagg_fill_window():
     if(n>200)clearInterval(iv);
   },150);
 })();
-"""
+""".replace("TITLE", json.dumps(title))
     orig = wac.FigureManagerWebAgg.get_javascript.__func__
 
     def patched(cls, stream=None):
