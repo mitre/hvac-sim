@@ -1,0 +1,34 @@
+---
+
+id: 362b8a18-aa5d-41f4-a0a6-c4b359df0d75
+name: HVACSim Emergency Stop
+facts:
+
+# Device addressing. HVACSim has no fixed IP trait: the abilities reach the
+# PLC by BACnet device instance, so keep this value.
+- trait: bacnet.device.instance # HVACSim BACnet device instance
+  value: 101
+
+# Object Collection reads the chiller load baseline.
+- trait: bacnet.object.type # chiller_speed_percent
+  value: analog-input
+- trait: bacnet.object.instance # chiller_speed_percent
+  value: 2
+
+# Write Property asserts the emergency stop; Read Property reads it back.
+- trait: bacnet.obj.type # emergency_stop
+  value: binary-value
+- trait: bacnet.obj.instance # emergency_stop
+  value: 1
+- trait: bacnet.obj.property # Present value
+  value: present-value
+- trait: bacnet.read.index # No array index, read the whole property
+  value: -1
+- trait: bacnet.write.priority # Manual operator priority, the same as the HMI
+  value: 8
+- trait: bacnet.write.index # Write entire property
+  value: -1
+- trait: bacnet.write.tag # Enumerated, for binary values
+  value: 9
+- trait: bacnet.write.value # Emergency stop active
+  value: 1

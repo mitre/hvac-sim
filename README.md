@@ -109,7 +109,7 @@ docker compose -f docker/docker-compose.yml up --build -d
 | Caldera | http://localhost:8888 (login `admin` / `admin`) |
 | Web HMI | http://localhost:8090 |
 
-All ports are published on `127.0.0.1` only. Caldera starts with the HVACSim fact source and adversary profiles loaded.
+All ports are published on `127.0.0.1` only. Caldera starts with the HVACSim fact sources and adversary profiles loaded.
 
 BACnet/IP uses UDP 47808, and discovery uses broadcasts, which do not cross Docker's port publishing, so 47808 is not published to the host. Caldera's agent and the HMI reach the PLC on the Docker network.
 
@@ -119,7 +119,7 @@ An optional Wireshark container shares the PLC's network, so it sees the HMI pol
 docker compose -f docker/docker-compose.yml --profile capture up -d capture
 ```
 
-Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`.
+Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`. If 3001 is taken, set `WIRESHARK_PORT` to another port.
 
 ## BACnet Map
 
@@ -184,20 +184,26 @@ With ambient 24 °C and a 5 °C server load, the room settles near 29 °C with n
 
 ## Caldera OT Integration
 
-This repo ships a fact source and adversary profiles for [MITRE Caldera™ for OT](https://github.com/mitre/caldera-ot) and its [BACnet plugin](https://github.com/mitre/bacnet). The Docker lab loads them for you. To use them with your own Caldera server, copy them into the plugin directories below, adjust the values for your network, and restart Caldera:
+This repo ships a fact source per scenario and adversary profiles for [MITRE Caldera™ for OT](https://github.com/mitre/caldera-ot) and its [BACnet plugin](https://github.com/mitre/bacnet). The Docker lab loads them for you. To use them with your own Caldera server, copy them into the plugin directories below, adjust the values for your network, and restart Caldera:
 
 | File | Destination |
 |---|---|
-| `docs/sources/hvac-simulator-facts.yml` | `plugins/bacnet/data/sources/` |
+| `docs/sources/hvac-*.yml` | `plugins/bacnet/data/sources/` |
 | `docs/adversaries/bacnet-*.yml` | `plugins/bacnet/data/adversaries/` |
+
+Each adversary profile is paired with its own fact source, which gives every
+trait the profile uses exactly one value, so each ability runs once as a single
+link in the order listed. The exception is Scenario 1 in the Docker lab, where
+Who-Is also finds the HMI (device `9101`), so the reads after it run once per
+device.
 
 ### Scenarios
 
-| Adversary | Scenario | Description |
-|---|---|---|
-| HVACSim BACnet Reconnaissance | [Scenario 1](docs/scenarios/scenario_1_reconnaissance.md) | Discover the device and read its objects without writing |
-| HVACSim BACnet Thermal Runaway | [Scenario 2](docs/scenarios/scenario_2_thermal_runaway.md) | Raise the setpoint and stop both fans so the room heats up |
-| HVACSim BACnet Emergency Stop | [Scenario 3](docs/scenarios/scenario_3_emergency_stop.md) | Trigger the emergency stop to remove all cooling |
+| Adversary | Fact source | Scenario | Description |
+|---|---|---|---|
+| HVACSim BACnet Reconnaissance | `hvac-reconnaissance.yml` | [Scenario 1](docs/scenarios/scenario_1_reconnaissance.md) | Discover the device and read the temperature and chiller points without writing |
+| HVACSim BACnet Thermal Runaway | `hvac-thermal-runaway.yml` | [Scenario 2](docs/scenarios/scenario_2_thermal_runaway.md) | Raise the setpoint above the room temperature so the chiller stops cooling |
+| HVACSim BACnet Emergency Stop | `hvac-emergency-stop.yml` | [Scenario 3](docs/scenarios/scenario_3_emergency_stop.md) | Trigger the emergency stop to remove all cooling |
 
 ## Running Tests
 

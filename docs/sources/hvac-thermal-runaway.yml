@@ -1,0 +1,34 @@
+---
+
+id: bf838d36-8957-4180-ae65-b97dae59fcfb
+name: HVACSim Thermal Runaway
+facts:
+
+# Device addressing. HVACSim has no fixed IP trait: the abilities reach the
+# PLC by BACnet device instance, so keep this value.
+- trait: bacnet.device.instance # HVACSim BACnet device instance
+  value: 101
+
+# Object Collection reads the room temperature baseline.
+- trait: bacnet.object.type # current_temperature_c
+  value: analog-input
+- trait: bacnet.object.instance # current_temperature_c
+  value: 1
+
+# Write Property raises the setpoint; Read Property reads the same object back.
+- trait: bacnet.obj.type # temperature_setpoint_c
+  value: analog-value
+- trait: bacnet.obj.instance # temperature_setpoint_c
+  value: 1
+- trait: bacnet.obj.property # Present value
+  value: present-value
+- trait: bacnet.read.index # No array index, read the whole property
+  value: -1
+- trait: bacnet.write.priority # Manual operator priority, the same as the HMI
+  value: 8
+- trait: bacnet.write.index # Write entire property
+  value: -1
+- trait: bacnet.write.tag # Real, for analog values
+  value: 4
+- trait: bacnet.write.value # Setpoint raised above the room temperature to stop cooling
+  value: 40
