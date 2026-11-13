@@ -20,7 +20,7 @@ def primary_ip():
         s.close()
 
 
-def primary_prefix(ip, default=16):
+def primary_prefix(ip, default=24):
     try:
         import fcntl
         import struct

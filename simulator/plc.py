@@ -11,25 +11,17 @@ Objects:
   - AI:2 chiller_speed_percent       (read-only)    sensor feedback
 
 To run:
-    python3 -m simulator.plc --ini ./config.ini
-
-Authors:
-    Capstone Group:
-        University of Hawaii at Manoa Group 9 2025
-
-    Developers:
-        * Jake Dickinson
-        * Elijah Saloma
-
-    Advisor:
-        * Samir Boussarhane
+    python -m simulator.plc
 """
 
 import argparse
 import asyncio
+import logging
 import signal
+import sys
 import threading
 import time
+from pathlib import Path
 
 import BAC0
 from BAC0.core.devices.local.factory import (
@@ -39,15 +31,23 @@ from BAC0.core.devices.local.factory import (
     binary_value,
 )
 
+from simulator import SIM
+from simulator.cli import add_deprecated_alias, warn_deprecated
 from simulator.config import load_config
 from simulator.network import resolve_address
 from simulator.sim import TICK_SECONDS, SimulationState, simulation_step
 
+DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config.ini"
+DEFAULT_PORT = SIM["protocols"]["bacnet"]["port"]
+
+logger = logging.getLogger(__name__)
+
 
 class HVACPLC:
-    def __init__(self, device_id, address, debug=False):
+    def __init__(self, device_id, address, port=DEFAULT_PORT, debug=False):
         self.device_id = device_id
         self.address = address
+        self.port = port
         self.debug = debug
         self.state = SimulationState()
         self.objects = {}
@@ -59,21 +59,23 @@ class HVACPLC:
         """Start BAC0, register the objects, and keep the loop alive while running."""
         if not self.debug:
             BAC0.log_level("silence")
+            logging.getLogger("bacpypes3").setLevel(logging.CRITICAL)
 
         try:
-            self.bacnet = BAC0.start(ip=self.address, deviceId=self.device_id)
-
-            self.bacnet.this_application.objectName = "HVACSim"
-            self.bacnet.this_application.vendorName = "HVACSim"
-            self.bacnet.this_application.modelName = "HVAC-Sim"
-            self.bacnet.this_application.firmwareRevision = "1.0"
-            self.bacnet.this_application.description = "HVAC Simulation Device"
+            self.bacnet = BAC0.start(
+                ip=self.address,
+                port=self.port,
+                deviceId=self.device_id,
+                localObjName="HVACSim",
+                modelName="HVAC-Sim",
+            )
 
             # Setpoint is a software parameter -> Analog Value (not an Analog Output).
             av_setpoint_f = analog_value(
                 name="temperature_setpoint_c",
                 instance=1,
                 description="Desired room temperature (°C)",
+                properties={"units": "degreesCelsius"},
                 presentValue=self.state.setpoint_c,
                 is_commandable=True,
             )
@@ -106,6 +108,7 @@ class HVACPLC:
                 name="current_temperature_c",
                 instance=1,
                 description="Measured room temperature (°C)",
+                properties={"units": "degreesCelsius"},
                 presentValue=self.state.current_temp_c,
             )
             ai_chiller_f = analog_input(
@@ -131,7 +134,7 @@ class HVACPLC:
             except KeyError as err:
                 missing_key = err.args[0] if err.args else "<unknown>"
                 raise RuntimeError(
-                    f"[HVACSim] Failed to create BACnet object '{missing_key}'. "
+                    f"Failed to create BACnet object '{missing_key}'. "
                     "Check BAC0 configuration and object factory definitions."
                 ) from err
 
@@ -145,9 +148,9 @@ class HVACPLC:
                     if oid is not None and "network-port" in str(oid):
                         local_app.delete_object(obj)
             except Exception as e:
-                print(f"[HVACSim] Warning: could not remove network-port object: {e}")
+                logger.warning("Could not remove the network-port object: %s", e)
 
-            print(f"[HVACSim] BACnet device ready on {self.address} (ID {self.device_id})")
+            logger.info("BACnet device %s listening on %s:%s", self.device_id, self.address.split("/")[0], self.port)
             self.ready.set()
 
             while self.running.is_set():
@@ -156,27 +159,32 @@ class HVACPLC:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            print(f"[HVACSim] Failed to initialize or run BACnet device: {e}")
+            logger.error("BACnet device failed: %s", e)
         finally:
             self.ready.set()
             try:
                 if self.bacnet:
                     self.bacnet.disconnect()
             except Exception as e:
-                print(f"[HVACSim] Warning: Error during BACnet disconnect: {e}")
+                logger.warning("Error during BACnet disconnect: %s", e)
 
     def read_commands(self):
-        self.state.setpoint_c = float(self.objects["setpoint"].presentValue)
-        self.state.intake_pct = float(self.objects["intake"].presentValue)
-        self.state.exhaust_pct = float(self.objects["exhaust"].presentValue)
-        self.state.estop = bool(self.objects["estop"].presentValue)
+        commands = {
+            "setpoint_c": float(self.objects["setpoint"].presentValue),
+            "intake_pct": float(self.objects["intake"].presentValue),
+            "exhaust_pct": float(self.objects["exhaust"].presentValue),
+            "estop": bool(self.objects["estop"].presentValue),
+        }
+        for field, value in commands.items():
+            if getattr(self.state, field) != value:
+                logger.info("Write: %s %s -> %s", field, getattr(self.state, field), value)
+                setattr(self.state, field, value)
 
     def write_outputs(self):
         self.objects["temp"].presentValue = self.state.current_temp_c
         self.objects["chiller"].presentValue = self.state.chiller_pct
 
     def control_loop(self):
-        print("[HVACSim] Control loop started.")
         while self.running.is_set():
             try:
                 self.read_commands()
@@ -185,16 +193,16 @@ class HVACPLC:
 
                 if int(time.time()) % 10 == 0:
                     s = self.state
-                    print(
-                        f"Tset={s.setpoint_c:.1f}°C | T={s.current_temp_c:.1f}°C | "
-                        f"Airflow={s.airflow_pct:.0f}% | Chiller={s.chiller_pct:.0f}% | "
-                        f"E-Stop={'ON' if s.estop else 'OFF'}"
+                    logger.info(
+                        "Tset=%.1f°C | T=%.1f°C | Airflow=%.0f%% | Chiller=%.0f%% | E-Stop=%s",
+                        s.setpoint_c, s.current_temp_c, s.airflow_pct, s.chiller_pct,
+                        "ON" if s.estop else "OFF",
                     )
 
                 time.sleep(TICK_SECONDS)
 
             except Exception as e:
-                print(f"[HVACSim] Error in loop: {e}")
+                logger.error("Error in control loop: %s", e)
                 time.sleep(2.0)
 
     def run(self):
@@ -209,20 +217,19 @@ class HVACPLC:
         core_thread.start()
 
         if not self.ready.wait(timeout=30.0):
-            print("[HVACSim] Error: BACnet objects failed to initialize within 30 seconds; shutting down.")
+            logger.error("BACnet objects failed to initialize within 30 seconds")
             self.running.clear()
             core_thread.join(timeout=5.0)
-            return
+            return 1
         if len(self.objects) != 6:
-            print("[HVACSim] Error: BACnet initialization failed; shutting down.")
+            logger.error("BACnet initialization failed")
             self.running.clear()
             core_thread.join(timeout=5.0)
-            return
+            return 1
 
         ctl_thread = threading.Thread(target=self.control_loop, name="hvac-loop", daemon=True)
         ctl_thread.start()
 
-        print("[HVACSim] Running headless; press Ctrl+C to stop.")
         try:
             while self.running.is_set():
                 time.sleep(0.5)
@@ -230,23 +237,41 @@ class HVACPLC:
             self.running.clear()
             ctl_thread.join(timeout=5.0)
             core_thread.join(timeout=5.0)
-            print("[HVACSim] Shut down.")
+            logger.info("Stopped")
+        return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BACnet HVAC Simulation Device")
-    parser.add_argument("--ini", default="./config.ini", help="Path to INI file")
-    parser.add_argument("--debug", action="store_true", help="Enable verbose BACnet logging")
-    parser.add_argument("--address", default=None, help="Override the config address, e.g. 'auto' in a container")
+    parser = argparse.ArgumentParser(
+        prog="python -m simulator.plc",
+        description=f"{SIM['name']} PLC: a BACnet/IP device running the server room simulation.",
+    )
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), metavar="PATH", help="configuration file (default: config.ini in the repo root)")
+    parser.add_argument("--host", metavar="HOST", help="address to bind (default: address in the config, auto)")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, metavar="PORT", help=f"BACnet/IP port (default: {DEFAULT_PORT})")
+    parser.add_argument("--debug", action="store_true", help="debug logging")
+    add_deprecated_alias(parser, "--ini", "--config")
+    add_deprecated_alias(parser, "--address", "--host")
     args = parser.parse_args()
 
-    config = load_config(args.ini)
-    address = resolve_address(args.address or config.address)
-    HVACPLC(config.device_id, address, args.debug).run()
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        level=logging.DEBUG if args.debug else logging.INFO,
+    )
+    warn_deprecated(args)
+    logging.getLogger("BAC0_Root").propagate = False
+
+    try:
+        config = load_config(args.config)
+        address = resolve_address(args.host or config.address)
+    except Exception as e:
+        logger.error("Invalid configuration in %s: %s", args.config, e)
+        return 1
+    return HVACPLC(config.device_id, address, args.port, args.debug).run()
 
 
 if __name__ == "__main__":
     import warnings
     warnings.filterwarnings("ignore", message="no signal handlers for child threads")
 
-    main()
+    sys.exit(main())
