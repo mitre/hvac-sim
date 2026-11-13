@@ -25,9 +25,10 @@ build an operation using the BACnet abilities below.
 | Fact | Description | Type | Default |
 |---|---|---|---|
 | `bacnet.device.instance` | HVACSim device instance | int | `101` |
-| `bacnet.obj.type` | Writable object type | string | `binary-value` |
-| `bacnet.obj.instance` | Object instance | int | `1` |
-| `bacnet.obj.property` | Property to write | string | `present-value` |
+| `bacnet.obj.type` | Object type for Write Property and Read Property | string | `binary-value`, `analog-input` |
+| `bacnet.obj.instance` | Object instance | int | `1`, `2` |
+| `bacnet.obj.property` | Property to write or read | string | `present-value` |
+| `bacnet.read.index` | Array index for reads (-1 = no index) | int | `-1` |
 | `bacnet.write.priority` | BACnet write priority | int | `8` |
 | `bacnet.write.index` | BACnet write index | int | `-1` |
 | `bacnet.write.tag` | Datatype tag (enumerated = 9) | int | `9` |
@@ -45,7 +46,7 @@ Control data:
 |---|---|---|---|
 | 1 | BACnet Object Collection - Basic | `bd13ac81-b932-463d-95aa-a22aeefbc9ac` | baseline read |
 | 2 | BACnet Write Property | `1a2faf5a-4601-11eb-b378-0242ac130002` | `binary-value 1`, value active (emergency stop) |
-| 3 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `analog-input 2` (chiller falling to 0) |
+| 3 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `bacnet.obj.type=analog-input`, `bacnet.obj.instance=2`, `bacnet.obj.property=present-value`, `bacnet.read.index=-1` (chiller falling to 0) |
 
 ## Expected Observations
 

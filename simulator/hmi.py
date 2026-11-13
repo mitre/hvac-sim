@@ -62,11 +62,11 @@ def _as_bool(present_value):
     return str(present_value).strip().lower() in ("active", "1", "true")
 
 
-async def _whois(bacnet):
-    return await bacnet.this_application.app.who_is()
+async def _whois(bacnet, device_id=None):
+    return await bacnet.this_application.app.who_is(device_id, device_id)
 
 
-async def poll_device(bacnet, addr, state, lock, data_buf):
+async def poll_device(bacnet, addr, device_id, state, lock, data_buf):
     """Read every point over BACnet and push it into state/data_buf."""
     while True:
         try:
@@ -105,7 +105,7 @@ async def poll_device(bacnet, addr, state, lock, data_buf):
                 state.connected = False
             print(f"[HMI] Read failed: {e}; rediscovering")
             try:
-                await _whois(bacnet)
+                await _whois(bacnet, device_id)
             except Exception:
                 pass
 
@@ -135,7 +135,7 @@ async def send_commands(bacnet, addr, cmd_q):
             print(f"[HMI] Write failed ({control}={payload}): {e}")
 
 
-async def run_io(device_ip, client_ip, state, lock, cmd_q, data_buf):
+async def run_io(device_ip, device_id, client_ip, state, lock, cmd_q, data_buf):
     bacnet = BAC0.lite(ip=client_ip, deviceId=CLIENT_DEVICE_ID, ping=False)
     await asyncio.sleep(2.0)
     print(f"[HMI] BACnet client ready on {client_ip} (ID {CLIENT_DEVICE_ID})")
@@ -143,13 +143,13 @@ async def run_io(device_ip, client_ip, state, lock, cmd_q, data_buf):
     # A directed WhoIs (what BAC0.read falls back to) is answered unreliably
     # here, so a broadcast WhoIs seeds the address cache and later reads skip it.
     for _ in range(30):
-        if await _whois(bacnet):
+        if await _whois(bacnet, device_id):
             break
         await asyncio.sleep(2.0)
-    print(f"[HMI] Talking to device at {device_ip}")
+    print(f"[HMI] Talking to device {device_id} at {device_ip}")
 
     await asyncio.gather(
-        poll_device(bacnet, device_ip, state, lock, data_buf),
+        poll_device(bacnet, device_ip, device_id, state, lock, data_buf),
         send_commands(bacnet, device_ip, cmd_q),
     )
 
@@ -161,7 +161,7 @@ def main():
     parser.add_argument("--web", action="store_true", help="Serve the HMI in a browser (WebAgg)")
     parser.add_argument("--web-port", type=int, default=8090, help="Web HMI port (default 8090)")
     parser.add_argument("--fahrenheit", action="store_true", help="Display temperatures in Fahrenheit")
-    parser.add_argument("--client-cidr", type=int, help="Client bind prefix; match the device subnet for Who-Is (default: detected from the interface, else 16)")
+    parser.add_argument("--client-cidr", type=int, help="Client bind prefix; match the device subnet for Who-Is (default: detected from the interface, else 24)")
     args = parser.parse_args()
 
     import matplotlib
@@ -197,7 +197,7 @@ def main():
     client_ip = f"{ip}/{args.client_cidr if args.client_cidr is not None else primary_prefix(ip)}"
 
     def run_loop():
-        asyncio.run(run_io(device_ip, client_ip, state, lock, cmd_q, data_buf))
+        asyncio.run(run_io(device_ip, args.device_id, client_ip, state, lock, cmd_q, data_buf))
 
     threading.Thread(target=run_loop, name="bacnet-io", daemon=True).start()
 

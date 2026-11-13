@@ -68,13 +68,12 @@ pip install -r requirements.txt
 ```
 [HVACSim]
 objectIdentifier = 101
-address = 127.0.0.1/24
-temperature_unit = celsius
+address = auto
 ```
 
-> **Address:** `address` is the interface the BACnet device binds to, with the subnet mask it answers Who-Is on. Pass `--address auto` to take both from the host's primary interface, which is what the containers under docker/ do.
+> **Address:** `address` is the interface the BACnet device binds to, with the subnet mask it answers Who-Is on. `auto` (the default) takes both from the host's primary interface.
 
-> **Temperature units:** Set `temperature_unit` to `celsius` or `fahrenheit` to choose the display unit used in the HMI visualization. The BACnet objects always use °C internally; this setting only affects what is shown on screen.
+> **Temperature units:** Start the HMI with `--fahrenheit` to show temperatures in °F. The BACnet objects always use °C; the flag only affects what the HMI shows.
 
 ### Docker
 
@@ -158,7 +157,7 @@ The ReadProperty service is used by a BACnet client to request the value of one 
 ##### Example: Read current temperature from AI:1
 
 ```
-./bacrp 101 analog-input 1 presentValue -1
+./bacrp 101 analog-input 1 present-value -1
 ```
 
 #### WriteProperty (bacwp)
@@ -174,19 +173,19 @@ The WriteProperty service is used by a BACnet client to write a value to a speci
 ##### Example 1: Set temperature setpoint on AV:1 to 18°C
 
 ```
-./bacwp 101 analog-value 1 presentValue 8 -1 real 18.0
+./bacwp 101 analog-value 1 present-value 8 -1 4 18.0
 ```
 
 ##### Example 2: Override/increase intake fan speed to 75%
 
 ```
-./bacwp 101 analog-output 1 presentValue 8 -1 real 75.0
+./bacwp 101 analog-output 1 present-value 8 -1 4 75.0
 ```
 
 ##### Example 3: Trigger Emergency Stop 🛑
 
 ```
-./bacwp 101 binary-value 1 presentValue 8 -1 boolean true
+./bacwp 101 binary-value 1 present-value 8 -1 9 1
 ```
 
 ## Understanding the Process Simulation
@@ -262,7 +261,7 @@ The HMI window contains:
 
 **Main Temperature Graph**
 
-* Real-time plot of current temperature (unit set by `temperature_unit` in config)
+* Real-time plot of current temperature (°C, or °F with `--fahrenheit`)
 * Setpoint shown as a dashed line
 
 **Mini Trend Charts**
@@ -273,7 +272,7 @@ The HMI window contains:
 
 **Interactive Controls**
 
-* Setpoint slider (unit set by `temperature_unit` in config)
+* Setpoint slider (°C, or °F with `--fahrenheit`)
 * Intake fan slider (%)
 * Exhaust fan slider (%)
 * Emergency-stop toggle button

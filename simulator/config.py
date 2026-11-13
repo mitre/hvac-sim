@@ -9,8 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class SimConfig:
     device_id: int = 101
-    address: str = "127.0.0.1"
-    use_fahrenheit: bool = False
+    address: str = "auto"
 
 
 def load_config(path) -> SimConfig:
@@ -22,9 +21,7 @@ def load_config(path) -> SimConfig:
         print(f"[HVACSim] Warning: INI file '{path}' is missing [HVACSim] section; using default settings.")
         return SimConfig()
     sec = cfg["HVACSim"]
-    unit = sec.get("temperature_unit", "celsius").strip().lower()
     return SimConfig(
         device_id=int(sec.get("objectIdentifier", "101")),
-        address=sec.get("address", "127.0.0.1"),
-        use_fahrenheit=unit in ("f", "fahrenheit", "imperial"),
+        address=sec.get("address", "auto"),
     )

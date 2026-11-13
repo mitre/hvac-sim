@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| **Tactic** | Discovery |
+| **Tactic** | Discovery, Collection |
 | **Techniques** | [T0846 - Remote System Discovery](https://attack.mitre.org/techniques/T0846/), [T0888 - Remote System Information Discovery](https://attack.mitre.org/techniques/T0888/), [T0861 - Point & Tag Identification](https://attack.mitre.org/techniques/T0861/) |
 | **Target** | HVACSim device over BACnet |
 | **Impact** | None - read-only operations only |
@@ -26,12 +26,12 @@ build an operation using the BACnet abilities below.
 | Fact | Description | Type | Default |
 |---|---|---|---|
 | `bacnet.device.instance` | HVACSim device instance | int | `101` |
-| `bacnet.obj.type` | Object type to enumerate | string | `device` |
-| `bacnet.obj.instance` | Device object instance | int | `101` |
-| `bacnet.obj.property` | Property id (object-list = 76) | int | `76` |
-| `bacnet.read.index` | Array index (-2 = whole array) | int | `-2` |
-| `bacnet.object.type` | Point type to read | string | `analog-input` |
-| `bacnet.object.instance` | Point instance | int | `1`, `2` |
+| `bacnet.obj.type` | Object type for Read Property | string | `device`, `analog-input` |
+| `bacnet.obj.instance` | Object instance for Read Property | int | `101`, `1`, `2` |
+| `bacnet.obj.property` | Property for Read Property (object-list = 76) | int or string | `76`, `present-value` |
+| `bacnet.read.index` | Array index (-1 = no index, whole property) | int | `-1` |
+| `bacnet.object.type` | Object type for Object Collection | string | `analog-input` |
+| `bacnet.object.instance` | Object instance for Object Collection | int | `1`, `2` |
 
 ### Caldera Operation
 
@@ -39,9 +39,8 @@ build an operation using the BACnet abilities below.
 |---|---|---|---|
 | 1 | BACnet Who-Is | `b93bd80e-3a70-11eb-adc1-0242ac120002` | (broadcast) |
 | 2 | BACnet Device Collection - Basic | `485e97e7-c352-432d-b8d3-fa8460e4fe49` | `bacnet.device.instance` |
-| 3 | BACnet Object Collection - Basic | `bd13ac81-b932-463d-95aa-a22aeefbc9ac` | `bacnet.obj.*`, `bacnet.read.index` |
-| 4 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `bacnet.object.type=analog-input`, `bacnet.object.instance=1` (temperature) |
-| 5 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `bacnet.object.type=analog-input`, `bacnet.object.instance=2` (chiller) |
+| 3 | BACnet Object Collection - Basic | `bd13ac81-b932-463d-95aa-a22aeefbc9ac` | `bacnet.object.type=analog-input`, `bacnet.object.instance=1`, `2` (temperature, chiller) |
+| 4 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `bacnet.obj.type=device`, `bacnet.obj.instance=101`, `bacnet.obj.property=76`, `bacnet.read.index=-1` (object list) |
 
 ## Expected Observations
 
