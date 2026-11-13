@@ -28,6 +28,7 @@ Authors:
 import argparse
 import asyncio
 import signal
+import sys
 import threading
 import time
 
@@ -61,19 +62,19 @@ class HVACPLC:
             BAC0.log_level("silence")
 
         try:
-            self.bacnet = BAC0.start(ip=self.address, deviceId=self.device_id)
-
-            self.bacnet.this_application.objectName = "HVACSim"
-            self.bacnet.this_application.vendorName = "HVACSim"
-            self.bacnet.this_application.modelName = "HVAC-Sim"
-            self.bacnet.this_application.firmwareRevision = "1.0"
-            self.bacnet.this_application.description = "HVAC Simulation Device"
+            self.bacnet = BAC0.start(
+                ip=self.address,
+                deviceId=self.device_id,
+                localObjName="HVACSim",
+                modelName="HVAC-Sim",
+            )
 
             # Setpoint is a software parameter -> Analog Value (not an Analog Output).
             av_setpoint_f = analog_value(
                 name="temperature_setpoint_c",
                 instance=1,
                 description="Desired room temperature (°C)",
+                properties={"units": "degreesCelsius"},
                 presentValue=self.state.setpoint_c,
                 is_commandable=True,
             )
@@ -106,6 +107,7 @@ class HVACPLC:
                 name="current_temperature_c",
                 instance=1,
                 description="Measured room temperature (°C)",
+                properties={"units": "degreesCelsius"},
                 presentValue=self.state.current_temp_c,
             )
             ai_chiller_f = analog_input(
@@ -212,12 +214,12 @@ class HVACPLC:
             print("[HVACSim] Error: BACnet objects failed to initialize within 30 seconds; shutting down.")
             self.running.clear()
             core_thread.join(timeout=5.0)
-            return
+            return 1
         if len(self.objects) != 6:
             print("[HVACSim] Error: BACnet initialization failed; shutting down.")
             self.running.clear()
             core_thread.join(timeout=5.0)
-            return
+            return 1
 
         ctl_thread = threading.Thread(target=self.control_loop, name="hvac-loop", daemon=True)
         ctl_thread.start()
@@ -231,6 +233,7 @@ class HVACPLC:
             ctl_thread.join(timeout=5.0)
             core_thread.join(timeout=5.0)
             print("[HVACSim] Shut down.")
+        return 0
 
 
 def main():
@@ -242,11 +245,11 @@ def main():
 
     config = load_config(args.ini)
     address = resolve_address(args.address or config.address)
-    HVACPLC(config.device_id, address, args.debug).run()
+    return HVACPLC(config.device_id, address, args.debug).run()
 
 
 if __name__ == "__main__":
     import warnings
     warnings.filterwarnings("ignore", message="no signal handlers for child threads")
 
-    main()
+    sys.exit(main())

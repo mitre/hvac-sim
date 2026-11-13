@@ -25,9 +25,12 @@ build an operation using the BACnet abilities below.
 | Fact | Description | Type | Default |
 |---|---|---|---|
 | `bacnet.device.instance` | HVACSim device instance | int | `101` |
-| `bacnet.obj.type` | Writable object type | string | `analog-value`, `analog-output` |
+| `bacnet.object.type` | Object type for Object Collection | string | `analog-input` |
+| `bacnet.object.instance` | Object instance for Object Collection | int | `1`, `2` |
+| `bacnet.obj.type` | Object type for Write Property and Read Property | string | `analog-value`, `analog-output`, `analog-input` |
 | `bacnet.obj.instance` | Object instance | int | `1`, `2` |
-| `bacnet.obj.property` | Property to write | string | `present-value` |
+| `bacnet.obj.property` | Property to write or read | string | `present-value` |
+| `bacnet.read.index` | Array index for reads (-1 = no index) | int | `-1` |
 | `bacnet.write.priority` | BACnet write priority | int | `8` |
 | `bacnet.write.index` | BACnet write index | int | `-1` |
 | `bacnet.write.tag` | Datatype tag (real = 4) | int | `4` |
@@ -45,15 +48,13 @@ Control data:
 
 | Step | Ability | Ability ID | Facts Used |
 |---|---|---|---|
-| 1 | BACnet Object Collection - Basic | `bd13ac81-b932-463d-95aa-a22aeefbc9ac` | baseline read |
-| 2 | BACnet Write Property | `1a2faf5a-4601-11eb-b378-0242ac130002` | `analog-value 1`, value 40 (raise setpoint) |
-| 3 | BACnet Write Property | `1a2faf5a-4601-11eb-b378-0242ac130002` | `analog-output 1`, value 0 (intake fan off) |
-| 4 | BACnet Write Property | `1a2faf5a-4601-11eb-b378-0242ac130002` | `analog-output 2`, value 0 (exhaust fan off) |
-| 5 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `analog-input 1` (temperature rising) |
+| 1 | BACnet Object Collection - Basic | `bd13ac81-b932-463d-95aa-a22aeefbc9ac` | `bacnet.object.type=analog-input`, `bacnet.object.instance=1`, `2` (baseline read) |
+| 2 | BACnet Write Property | `1a2faf5a-4601-11eb-b378-0242ac130002` | `bacnet.obj.*` and `bacnet.write.*` from the source: `analog-value 1`, value 40 (raise setpoint); `analog-output 1` and `2`, value 0 (fans off) |
+| 3 | BACnet Read Property | `47432648-5678-11eb-ae93-0242ac130002` | `bacnet.obj.type=analog-input`, `bacnet.obj.instance=1`, `bacnet.obj.property=present-value`, `bacnet.read.index=-1` (temperature rising) |
 
 ## Expected Observations
 
-- All writes are accepted with no authentication.
+- Caldera runs Write Property once for every combination of the write facts in the source, so each point is written more than once. The PLC rejects the combinations that do not fit an object and accepts the rest with no authentication.
 - The PI loop stops calling for chilling once the setpoint sits above room temperature, so chiller load falls toward 0.
 - Airflow drops to 0% with both fans off.
 - Room temperature (AI:1) climbs on the HMI trend and approaches the modeled ceiling.

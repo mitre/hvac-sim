@@ -13,12 +13,14 @@ facts:
 
 - trait: bacnet.obj.type # Device object
   value: device
+- trait: bacnet.obj.type # current_temperature_c / chiller_speed_percent
+  value: analog-input
 - trait: bacnet.obj.instance # Device object instance
   value: 101
 - trait: bacnet.obj.property # Object list
   value: 76
-- trait: bacnet.read.index # Whole array
-  value: -2
+- trait: bacnet.read.index # No array index, read the whole property
+  value: -1
 - trait: bacnet.object.type # Sensor points (current temperature, chiller load)
   value: analog-input
 - trait: bacnet.object.instance # current_temperature_c
@@ -34,13 +36,13 @@ facts:
   value: analog-output
 - trait: bacnet.obj.type # emergency_stop
   value: binary-value
-- trait: bacnet.obj.instance # setpoint (AV) / intake fan (AO) / emergency_stop (BV)
+- trait: bacnet.obj.instance # setpoint (AV) / intake fan (AO) / emergency_stop (BV) / temperature (AI)
   value: 1
-- trait: bacnet.obj.instance # exhaust fan (AO) / chiller sensor (AI)
+- trait: bacnet.obj.instance # exhaust fan (AO) / chiller load (AI)
   value: 2
 - trait: bacnet.obj.property # Present value
   value: present-value
-- trait: bacnet.write.priority # Manual operator priority
+- trait: bacnet.write.priority # Manual operator priority, the same as the HMI
   value: 8
 - trait: bacnet.write.index # Write entire property
   value: -1
