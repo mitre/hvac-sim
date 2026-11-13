@@ -1,96 +1,119 @@
-# HVACSim: BACnet Server Room HVAC Simulator
+# HVACSim
 
-A simulated HVAC control system using BACnet/IP, designed as a companion to **Caldera for OT** for red/blue-team exercises involving cyber–physical systems.
+A simulated server-room HVAC controller with BACnet process control, built as a target for [MITRE Caldera™ for OT](https://github.com/mitre/caldera-ot). For a walkthrough, read [Caldera for OT HVACSim: Expanding Access to OT Security Education](https://medium.com/@mitrecaldera/caldera-for-ot-hvacsim-expanding-access-to-ot-security-education-c4fcc47396ab).
+
+![HVACSim HMI](docs/images/demo.gif)
 
 ## Authors
 
-Created by University of Hawaii at Manoa Students for Capstone Project:
-Elijah Saloma and Jake Dickinson
+Created by University of Hawaii at Manoa students: Elijah Saloma and Jake Dickinson, advised by Samir Boussarhane.
 
-In collaboration with Caldera for OT tools ([ot@mitre.org](mailto:ot@mitre.org)).
+In collaboration with MITRE Caldera™ for OT ([ot@mitre.org](mailto:ot@mitre.org)).
 
 HVACSim is intended to grow open source collaboration in OT. We encourage forks and pull requests with improvements, new features, deployment notes, documentation, and tests.
 
-The students' original BACpypes version is preserved in the [v1.0.0 release](https://github.com/mitre/hvac-sim/releases/tag/v1.0.0). This version moves to the bac0 library, uses standard BACnet object types, and adds Caldera scenarios and a docker lab.
-
-![HMI](./docs/images/Demo.gif)
+The students' original version is preserved in the [v1.0.0 release](https://github.com/mitre/hvac-sim/releases/tag/v1.0.0).
 
 ## Description
 
-**HVACSim** provides a realistic, software-only BACnet simulation of a server-room HVAC controller. The system exposes writable BACnet objects (setpoint, fans, emergency stop) and simulates:
+HVACSim models a server room cooled by an intake fan, an exhaust fan and a chiller. The PLC is a BACnet/IP device that runs the thermal model and exposes the setpoint, the fan speeds and the emergency stop as writable objects, and the room temperature and chiller load as read-only inputs. The HMI is a separate BACnet client that polls the PLC and shows the process, so writes from Caldera show up on screen.
 
-* Temperature dynamics
-* Chiller load and PI feedback loop
-* Sensor noise and an actuator lag
-* An HMI with sliders, trend charts, and an emergency-stop; the HMI is intended to easily observe overrides by the Caldera for OT client.
-
-This allows cybersecurity practitioners to emulate attacks against building HVAC systems without requiring physical industrial hardware. When paired with the [Caldera BACnet plugin](https://github.com/mitre/bacnet), HVACSim becomes an OT testbed for reconnaissance, manipulation, and response.
+* Room temperature driven by ambient heat, server load, airflow cooling and chiller cooling
+* A PI-controlled chiller with actuator lag
+* Sensor and actuator noise
+* An emergency stop that turns off the fans and the chiller
+* An HMI with a temperature trend, chiller and fan charts, setpoint and fan sliders, and an emergency-stop button
 
 ## Getting Started
-For a detailed walkthrough, please read our medium article on HVACSim! https://medium.com/@mitrecaldera/caldera-for-ot-hvacsim-expanding-access-to-ot-security-education-c4fcc47396ab
 
 ### Dependencies
 
-* Python 3.10+
-* `matplotlib` (for the HMI)
-* `bac0` (BACnet helper library; provides BACnet/IP via BACpypes3)
-* Should run on Linux, macOS, or Windows
-* **Caldera** with its BACnet plugin
-
-  * [Caldera installation instructions](https://github.com/apache/caldera?tab=readme-ov-file#requirements)
-
-**Linux users:** Install system packages for matplotlib GUI support:
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install python3-tk
-
-# Fedora/RHEL
-sudo dnf install python3-tkinter
-```
+* Python 3.12+
+* BAC0, bacpypes3, matplotlib, tornado (see `requirements.txt`)
+* Tkinter for the desktop HMI window ([Installation - TkDocs](https://tkdocs.com/tutorial/install.html))
 
 ### Installation
 
-1. Clone the repository:
-
 ```bash
 git clone https://github.com/mitre/hvac-sim.git
-```
-
-2. Install Python dependencies:
-
-```bash
+cd hvac-sim
 pip install -r requirements.txt
 ```
 
-3. You can provide an INI-style config file to set the device instance and network address. Example provided in repo root (`config.ini`):
+## Usage
+
+### Run Script
+
+```bash
+python run.py
+```
+
+The script asks how to run the simulator:
 
 ```
-[HVACSim]
-objectIdentifier = 101
-address = 127.0.0.1/24
-temperature_unit = celsius
+HVACSim Simulator
+
+Deployment:
+1. PLC only
+2. HMI only
 ```
 
-> **Address:** `address` is the interface the BACnet device binds to, with the subnet mask it answers Who-Is on. Pass `--address auto` to take both from the host's primary interface, which is what the containers under docker/ do.
+* **PLC only** runs the PLC. The host is the address it binds to (default `auto`).
+* **HMI only** runs the HMI against a PLC elsewhere. The host is the PLC's address (default `127.0.0.1`).
 
-> **Temperature units:** Set `temperature_unit` to `celsius` or `fahrenheit` to choose the display unit used in the HMI visualization. The BACnet objects always use °C internally; this setting only affects what is shown on screen.
+It then asks for the PLC host and the PLC port (default `47808`) and, for HMI only, whether to serve the HMI as a web page (`Web HMI? [y/N]`). Local is not offered for BACnet, because the PLC and the HMI each need UDP 47808; run them on different hosts or containers.
+
+### Modules
+
+```bash
+python -m simulator.plc
+python -m simulator.hmi --host <PLC address> --web
+```
+
+PLC (`simulator.plc`):
+
+| Flag | Default | Description |
+|---|---|---|
+| `--config PATH` | `config.ini` | Configuration file |
+| `--host HOST` | `auto` | Address to bind: `auto` or `IP/prefix` |
+| `--port PORT` | `47808` | BACnet/IP UDP port |
+| `--debug` | off | Debug logging |
+
+`config.ini` sets the device instance (`objectIdentifier`, default `101`) and the address to bind (`address`, default `auto`); `--host` overrides `address`. `auto` takes the IP address and subnet mask of the host's primary interface. The mask matters, because the PLC answers Who-Is broadcasts on that subnet.
+
+HMI (`simulator.hmi`):
+
+| Flag | Default | Description |
+|---|---|---|
+| `--host HOST` | `127.0.0.1` | PLC to poll; the PLC listens on its interface address, not `127.0.0.1`, so give that address |
+| `--port PORT` | `47808` | PLC port |
+| `--web` | off | Serve the HMI as a web page instead of a desktop window |
+| `--web-port PORT` | `8090` | Web HMI port |
+| `--device-id ID` | `101` | PLC device instance |
+| `--fahrenheit` | off | Show temperatures in °F; the BACnet objects stay in °C |
+| `--client-cidr PREFIX` | from the interface, else `24` | Prefix length of the HMI's own BACnet address; match the PLC's subnet |
+| `--debug` | off | Debug logging |
+
+The old flags `--ini`, `--address` and `--device-ip` still work, with a deprecation warning; use `--config` and `--host`.
 
 ### Docker
 
-`docker/docker-compose.yml` runs the sim, the web HMI, Caldera, and an agent on a shared bridge:
+`docker/docker-compose.yml` runs the PLC, the web HMI, Caldera with the BACnet plugin, and a Sandcat agent on one network:
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build -d
 ```
 
-BACnet/IP communicates over UDP port 47808. The server and the HMI both need that port, and two programs can't share one port on the same machine, so each runs in its own container and reaches the other over the network by IP.
+| Service | Address |
+|---|---|
+| Caldera | http://localhost:8888 (login `admin` / `admin`) |
+| Web HMI | http://localhost:8090 |
 
-Caldera starts with the HVACSim fact source and adversaries loaded.
+All ports are published on `127.0.0.1` only. Caldera starts with the HVACSim fact source and adversary profiles loaded.
 
-### Packet Capture
+BACnet/IP uses UDP 47808, and discovery uses broadcasts, which do not cross Docker's port publishing, so 47808 is not published to the host. Caldera's agent and the HMI reach the PLC on the Docker network.
 
-An optional Wireshark container shares the sim's network, so it sees the web HMI polling and the BACnet traffic from the Caldera agent:
+An optional Wireshark container shares the PLC's network, so it sees the HMI polling and the BACnet traffic from the Caldera agent:
 
 ```bash
 docker compose -f docker/docker-compose.yml --profile capture up -d capture
@@ -98,246 +121,120 @@ docker compose -f docker/docker-compose.yml --profile capture up -d capture
 
 Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`.
 
-## BACnet Object Map
+## BACnet Map
 
-The simulator exposes the following BACnet objects:
+The device is instance `101`. All writable objects are commandable; the HMI writes at priority 8 (manual operator).
 
-Object types follow standard BACnet/HVAC practice: sensors are Analog Inputs,
-fan actuator commands are Analog Outputs, the setpoint is an Analog Value, and
-the emergency stop is a Binary Value. Instances are numbered per type from 1.
+### Analog Values (Read/Write)
 
-| Type    | Object Name                 | Access      | Description                          |
-| ------- | --------------------------- | ----------- | ------------------------------------ |
-| **AV:1** | `temperature_setpoint_c`   | commandable | Desired room temperature (°C)        |
-| **AO:1** | `intake_fan_speed_percent` | commandable | Intake fan command (0–100%)          |
-| **AO:2** | `exhaust_fan_speed_percent`| commandable | Exhaust fan command (0–100%)         |
-| **BV:1** | `emergency_stop`           | commandable | Safety kill switch for chiller/fans  |
-| **AI:1** | `current_temperature_c`    | read-only   | Measured room temperature (°C)       |
-| **AI:2** | `chiller_speed_percent`    | read-only   | PI-controlled chiller load (%)       |
+| Instance | Name | Description |
+|---|---|---|
+| 1 | `temperature_setpoint_c` | Room temperature setpoint, °C (default 23) |
 
-## Usage
+### Analog Outputs (Read/Write)
 
-### Step 1: Start the Simulator
+| Instance | Name | Description |
+|---|---|---|
+| 1 | `intake_fan_speed_percent` | Intake fan speed, 0-100 % (default 30) |
+| 2 | `exhaust_fan_speed_percent` | Exhaust fan speed, 0-100 % (default 30) |
 
-```bash
-python3 -m simulator.plc --ini ./config.ini
-```
+### Binary Values (Read/Write)
 
-Launching the simulator does two things:
+| Instance | Name | Description |
+|---|---|---|
+| 1 | `emergency_stop` | Emergency stop; `active` turns off the fans and the chiller |
 
-1. Starts the BACnet/IP device
-2. Spawns the HVAC control loop thread
+### Analog Inputs (Read)
 
-The simulator no longer draws its own window. Read and write its points over
-BACnet, with the HMI in Step 2 or with Caldera.
+| Instance | Name | Description |
+|---|---|---|
+| 1 | `current_temperature_c` | Measured room temperature, °C (10-40) |
+| 2 | `chiller_speed_percent` | PI-controlled chiller load, 0-100 % |
 
-If the program fails to start, verify Python, dependencies, and the `.ini` file. Any exceptions should be printed in the console.
-
-### Step 2: Start the HMI
-
-Run the HMI on a different machine or container than the simulator, since BACnet/IP needs UDP 47808 on each end. On a single machine, run them with Docker.
+The BACnet plugin's command-line tools take these objects directly. For example, to read the room temperature and then trigger the emergency stop (tag `9`, enumerated):
 
 ```bash
-python3 -m simulator.hmi --device-ip <simulator IP>
+./bacrp 101 analog-input 1 present-value -1
+./bacwp 101 binary-value 1 present-value 8 -1 9 1
 ```
 
-### Step 3: Read/Write Properties
+Analog writes use tag `4` (real), e.g. `./bacwp 101 analog-value 1 present-value 8 -1 4 18.0`.
 
-To "attack" the device, one can access property values (i.e., read) and modify them as desired (i.e., write). Below is an example of the commands to set in the adversary profile in Caldera (or through CLI):
+## Process Model
 
-#### ReadProperty (bacrp)
-
-The ReadProperty service is used by a BACnet client to request the value of one property from one BACnet object.
-
-##### Usage
+HVACSim models the core thermal dynamics to support Caldera testing; it is not an accurate physical HVAC model. Every second it computes:
 
 ```
-./bacrp <device-instance> <object-type> <object-instance> <property> <index>
+error     = room_temp - setpoint
+integral  = clamp(integral + error, -200, 200)
+target    = clamp(KP * error + KI * integral, 0, 100)
+chiller   = clamp(chiller + (target - chiller) * CHILLER_LAG + noise, 0, 100)
+airflow   = (intake + exhaust) / 2
+cooling   = airflow / 100 * AIRFLOW_MAX_COOL + chiller / 100 * CHILLER_MAX_COOL
+room_temp = clamp(room_temp + ((ambient + server_load) - room_temp) / ROOM_TIME_CONSTANT - cooling + noise, 10, 40)
 ```
 
-##### Example: Read current temperature from AI:1
+With ambient 24 °C and a 5 °C server load, the room settles near 29 °C with no cooling. The emergency stop forces airflow and the chiller target to 0 %.
 
-```
-./bacrp 101 analog-input 1 presentValue -1
-```
+## Troubleshooting
 
-#### WriteProperty (bacwp)
+* If BACnet clients cannot discover the PLC, check that no firewall blocks UDP 47808 and that `--host` (or `address`) names the right interface and mask.
+* Only one program per address can use UDP 47808, so run the PLC and the HMI on different hosts or containers.
+* Run the PLC or the HMI with `--debug` to see BAC0's logs.
 
-The WriteProperty service is used by a BACnet client to write a value to a specific property of a BACnet object.
+## Caldera OT Integration
 
-##### Usage
+This repo ships a fact source and adversary profiles for [MITRE Caldera™ for OT](https://github.com/mitre/caldera-ot) and its [BACnet plugin](https://github.com/mitre/bacnet). The Docker lab loads them for you. To use them with your own Caldera server, copy them into the plugin directories below, adjust the values for your network, and restart Caldera:
 
-```
-./bacwp <device-instance> <object-type> <object-instance> <property> <priority> <index> <tag> <value>
-```
+| File | Destination |
+|---|---|
+| `docs/sources/hvac-simulator-facts.yml` | `plugins/bacnet/data/sources/` |
+| `docs/adversaries/bacnet-*.yml` | `plugins/bacnet/data/adversaries/` |
 
-##### Example 1: Set temperature setpoint on AV:1 to 18°C
+### Scenarios
 
-```
-./bacwp 101 analog-value 1 presentValue 8 -1 real 18.0
-```
+| Adversary | Scenario | Description |
+|---|---|---|
+| HVACSim BACnet Reconnaissance | [Scenario 1](docs/scenarios/scenario_1_reconnaissance.md) | Discover the device and read its objects without writing |
+| HVACSim BACnet Thermal Runaway | [Scenario 2](docs/scenarios/scenario_2_thermal_runaway.md) | Raise the setpoint and stop both fans so the room heats up |
+| HVACSim BACnet Emergency Stop | [Scenario 3](docs/scenarios/scenario_3_emergency_stop.md) | Trigger the emergency stop to remove all cooling |
 
-##### Example 2: Override/increase intake fan speed to 75%
+## Running Tests
 
-```
-./bacwp 101 analog-output 1 presentValue 8 -1 real 75.0
-```
-
-##### Example 3: Trigger Emergency Stop 🛑
-
-```
-./bacwp 101 binary-value 1 presentValue 8 -1 boolean true
+```bash
+pip install pytest==8.3.5 pytest-asyncio==0.25.3 pytest-cov==6.0.0
+python -m pytest tests/
 ```
 
-## Understanding the Process Simulation
+`bash docker/smoke-test.sh` builds and starts the Docker lab, then has Caldera run one read per protocol against the PLC. CI runs both.
 
-> **Disclaimer:** HVACSim models core thermal dynamics, but its primary purpose is to support Caldera/BACnet testing rather than to serve as a fully accurate physical HVAC model.
+## Other Simulators
 
-### 1. Room Thermal Model
+MITRE provides other open-source simulators for testing the Caldera for OT plugins without physical hardware.
 
-The simulator continuously computes room temperature using:
+### [Aloha Water Treatment](https://github.com/mitre/aloha-water-treatment)
 
-* **Ambient heat** entering from the outside
-* **Internal server load** (internal heat source)
-* **Airflow-based cooling**
-* **Chiller-based cooling**
-* **Temperature sensor noise**
-* **Actuator lag**
+Aloha Water Treatment is a simulated water treatment plant with Modbus and BACnet process control.
 
-The temperature differential follows:
+### [Grid Watch](https://github.com/mitre/grid-watch)
 
-```
-dT_dt = ((ambient + internal_load) - room_temp) / room_time_constant \
-        - (cooling_from_fans + cooling_from_chiller)
-```
+Grid Watch is a simulated electrical grid outstation with DNP3 process control.
 
-### 2. Airflow Cooling
+### [Wildcat Dam](https://github.com/mitre/wildcatdam)
 
-The intake and exhaust sliders (or Caldera writes) produce an airflow percentage:
+Wildcat Dam is a simulated dam controller with Modbus process control.
 
-```
-airflow = (intake + exhaust) / 2
-```
+## Acknowledgements
 
-Cooling power is proportional to airflow:
-
-```
-cooling_airflow = (airflow / 100) * AIRFLOW_MAX_COOL
-```
-
-### 3. Chiller Logic (PI Controller)
-
-The chiller is controlled by a **Proportional-Integral (PI)** loop:
-
-```
-error = current_temp - setpoint
-
-integral = integral + error * tick
-
-chiller_target = KP * error + KI * integral
-```
-
-The chiller actuator then moves toward the target following:
-
-```
-chiller_speed = chiller_speed + (chiller_target - chiller_speed) * CHILLER_LAG
-```
-
-Random noise is added to emulate real-world imperfectness:
-
-```
-chiller_speed = chiller_speed + Uniform(-NOISE_CHILLER, NOISE_CHILLER)
-```
-
-### 4. Emergency Stop Logic
-
-When emergency stop is triggered:
-
-* Airflow is forced to **0%**
-* Chiller target is forced to **0%**
-
-## HMI Features
-
-The HMI window contains:
-
-**Main Temperature Graph**
-
-* Real-time plot of current temperature (unit set by `temperature_unit` in config)
-* Setpoint shown as a dashed line
-
-**Mini Trend Charts**
-
-* Chiller load (%)
-* Intake airflow (%)
-* Exhaust airflow (%)
-
-**Interactive Controls**
-
-* Setpoint slider (unit set by `temperature_unit` in config)
-* Intake fan slider (%)
-* Exhaust fan slider (%)
-* Emergency-stop toggle button
-
-Closing the window stops the HMI; the simulator keeps running.
-
-## Using HVACSim with Caldera
-
-If using Caldera with its BACnet plugin:
-
-1. Start the HVACSim process
-2. Start Caldera
-3. Create an operation
-
-   * Create an agent
-   * Create an adversary profile including any BACnet features desired
-   * Create an operation that selects the constructed adversary profile
-   * Start operation
-
-4. Use abilities such as:
-
-   * *ReadProperty* &rarr; Check temperature or chiller load
-   * *WriteProperty* &rarr; Change setpoint
-   * *WriteProperty* &rarr; Force fans to 100%
-   * *WriteProperty* &rarr; Trigger Emergency Stop
-
-This allows for simulation of:
-
-* Safety bypass attempts
-* Setpoint manipulation attacks
-* Disruptive fan/chiller control
-* Reconnaissance of BACnet points
-
-### Fact Source, Adversary Profiles, and Scenarios
-
-This repo ships Caldera templates under `docs/`:
-
-* [`docs/sources/hvac-simulator-facts.yml`](docs/sources/hvac-simulator-facts.yml) - a fact source with the HVACSim device, read, and write facts. Copy it into `plugins/bacnet/data/sources/`.
-* [`docs/adversaries/`](docs/adversaries/) - three BACnet adversary profiles. Copy them into `plugins/bacnet/data/adversaries/`.
-* [`docs/scenarios/`](docs/scenarios/) - walkthroughs mapping each profile to ATT&CK for ICS techniques and the Caldera abilities it runs:
-  * [Scenario 1: Reconnaissance](docs/scenarios/scenario_1_reconnaissance.md)
-  * [Scenario 2: Thermal Runaway](docs/scenarios/scenario_2_thermal_runaway.md)
-  * [Scenario 3: Emergency Stop](docs/scenarios/scenario_3_emergency_stop.md)
-
-The ability UUIDs in the adversary profiles come from the [Caldera BACnet plugin](https://github.com/mitre/bacnet); the profiles reference them, they are not defined here.
-
-## Help and Troubleshooting
-
-1. Ensure the `.ini` file has a valid BACnet device ID and IP address
-2. If BACnet clients cannot discover HVACSim, verify:
-
-   * No firewall blocks UDP/47808
-   * Correct network interface is used
-3. Run with `python3 -m simulator.plc --debug` for verbose BACnet logs
+* [Caldera](https://github.com/apache/caldera) - automated adversary emulation platform
+* [Caldera for OT](https://github.com/mitre/caldera-ot) - Caldera plugins for OT protocols
+* [BAC0](https://github.com/ChristianTremblay/BAC0) and [BACpypes3](https://github.com/JoelBender/BACpypes3) - BACnet/IP device and client
+* [matplotlib](https://matplotlib.org/) - HMI charts and web HMI
+* [Tornado](https://www.tornadoweb.org/) - web server for the web HMI
+* [MITRE ATT&CK for ICS](https://attack.mitre.org/matrices/ics/) - techniques used in the scenarios
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
-See the LICENSE file for details.
-
-## Acknowledgments
-
-* [Caldera](https://github.com/apache/caldera)
-* [Caldera for OT](https://github.com/mitre/caldera-ot)
-* [BAC0](https://pypi.org/project/bac0/)
+This project is licensed under the Apache-2.0 License; see the LICENSE file for details.
 
 © 2026 The MITRE Corporation. Approved for Public Release; Distribution Unlimited. Case Number 26-0182.

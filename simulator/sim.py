@@ -4,17 +4,6 @@ Server room thermal model, independent of BACnet.
 SimulationState holds the operator commands (setpoint, fans, emergency stop) and
 the process values (room temperature, chiller load). simulation_step advances it
 by one tick.
-
-Authors:
-    Capstone Group:
-        University of Hawaii at Manoa Group 9 2025
-
-    Developers:
-        * Jake Dickinson
-        * Elijah Saloma
-
-    Advisor:
-        * Samir Boussarhane
 """
 
 import random
