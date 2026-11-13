@@ -2,8 +2,11 @@
 
 id: ad7a7705-c148-49d4-8639-ce5c69b0b6f3
 name: HVACSim BACnet Thermal Runaway
-description: Raise the temperature setpoint and force both fans off to defeat cooling and drive the room hot
+description: >-
+  Read the room temperature baseline, raise the temperature setpoint above the
+  room temperature so the chiller stops cooling, then read the setpoint back to
+  confirm the write. With cooling off the room heats up.
 atomic_ordering:
-  - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic (baseline)
-  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (setpoint high, fans off)
-  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (verify temperature rising)
+  - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic (room temperature baseline)
+  - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (setpoint to 40)
+  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (read setpoint back)

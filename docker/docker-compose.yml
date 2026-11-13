@@ -14,7 +14,7 @@ services:
     # 3001 is the capture sidecar's web UI: the sidecar shares this container's
     # network namespace, so its port is published here.
     ports:
-      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:${WIRESHARK_PORT:-3001}:3001"
     # BACnet has no TCP port to probe, so send a Who-Is and wait for the I-Am.
     healthcheck:
       test:

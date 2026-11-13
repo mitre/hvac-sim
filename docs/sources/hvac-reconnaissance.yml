@@ -1,0 +1,26 @@
+---
+
+id: 0c244d19-910f-4e67-b1e1-232355c186e6
+name: HVACSim Reconnaissance
+facts:
+
+# Device addressing. HVACSim has no fixed IP trait: the abilities reach the
+# PLC by BACnet device instance, so keep this value.
+- trait: bacnet.device.instance # HVACSim BACnet device instance
+  value: 101
+
+# Object Collection reads the room temperature point.
+- trait: bacnet.object.type # current_temperature_c
+  value: analog-input
+- trait: bacnet.object.instance # current_temperature_c
+  value: 1
+
+# Read Property reads the chiller load present value.
+- trait: bacnet.obj.type # chiller_speed_percent
+  value: analog-input
+- trait: bacnet.obj.instance # chiller_speed_percent
+  value: 2
+- trait: bacnet.obj.property # Present value
+  value: present-value
+- trait: bacnet.read.index # No array index, read the whole property
+  value: -1

@@ -2,8 +2,10 @@
 
 id: 3e221181-54ba-42f9-97d7-f248e7170e75
 name: HVACSim BACnet Emergency Stop
-description: Assert the emergency stop object to halt fans and chiller, then verify the process shutdown
+description: >-
+  Read the chiller load baseline, assert the emergency stop object to halt the
+  fans and chiller, then read the emergency stop back to confirm it is active.
 atomic_ordering:
-  - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic (baseline)
+  - bd13ac81-b932-463d-95aa-a22aeefbc9ac  # BACnet Object Collection - Basic (chiller load baseline)
   - 1a2faf5a-4601-11eb-b378-0242ac130002  # BACnet Write Property (emergency stop active)
-  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (verify chiller falling)
+  - 47432648-5678-11eb-ae93-0242ac130002  # BACnet Read Property (read emergency stop back)

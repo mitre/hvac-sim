@@ -119,7 +119,7 @@ An optional Wireshark container shares the PLC's network, so it sees the HMI pol
 docker compose -f docker/docker-compose.yml --profile capture up -d capture
 ```
 
-Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`.
+Open https://127.0.0.1:3001 and start a capture on `eth0`. Saved captures land in `docker/captures/`. If 3001 is taken, set `WIRESHARK_PORT` to another port.
 
 ## BACnet Map
 
@@ -188,16 +188,20 @@ This repo ships a fact source and adversary profiles for [MITRE Caldera™ for O
 
 | File | Destination |
 |---|---|
-| `docs/sources/hvac-simulator-facts.yml` | `plugins/bacnet/data/sources/` |
+| `docs/sources/hvac-*.yml` | `plugins/bacnet/data/sources/` |
 | `docs/adversaries/bacnet-*.yml` | `plugins/bacnet/data/adversaries/` |
+
+Each adversary profile is paired with its own fact source, which gives every
+trait the profile uses exactly one value, so each ability runs once as a single
+link in the order listed.
 
 ### Scenarios
 
-| Adversary | Scenario | Description |
-|---|---|---|
-| HVACSim BACnet Reconnaissance | [Scenario 1](docs/scenarios/scenario_1_reconnaissance.md) | Discover the device and read its objects without writing |
-| HVACSim BACnet Thermal Runaway | [Scenario 2](docs/scenarios/scenario_2_thermal_runaway.md) | Raise the setpoint and stop both fans so the room heats up |
-| HVACSim BACnet Emergency Stop | [Scenario 3](docs/scenarios/scenario_3_emergency_stop.md) | Trigger the emergency stop to remove all cooling |
+| Adversary | Fact source | Scenario | Description |
+|---|---|---|---|
+| HVACSim BACnet Reconnaissance | `hvac-reconnaissance.yml` | [Scenario 1](docs/scenarios/scenario_1_reconnaissance.md) | Discover the device and read the temperature and chiller points without writing |
+| HVACSim BACnet Thermal Runaway | `hvac-thermal-runaway.yml` | [Scenario 2](docs/scenarios/scenario_2_thermal_runaway.md) | Raise the setpoint above the room temperature so the chiller stops cooling |
+| HVACSim BACnet Emergency Stop | `hvac-emergency-stop.yml` | [Scenario 3](docs/scenarios/scenario_3_emergency_stop.md) | Trigger the emergency stop to remove all cooling |
 
 ## Running Tests
 
